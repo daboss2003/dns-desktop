@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# Compiled output
+# ---------------------------------------------------------------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.a
+
+# Binaries built from ./cmd. Anchored to the repository root so that a package
+# directory of the same name is never ignored by accident.
+/gatewaydns
+/bin/
+/dist/
+
+# `go test -c` and `go test` leave these behind when a run is interrupted.
+*.test
+
+# ---------------------------------------------------------------------------
+# Test, coverage and profiling output
+# ---------------------------------------------------------------------------
+coverage.out
+coverage.html
+*.coverprofile
+cpu.prof
+mem.prof
+block.prof
+mutex.prof
+trace.out
+
+# ---------------------------------------------------------------------------
+# Fuzzing
+# ---------------------------------------------------------------------------
+# There are two kinds of file under testdata/fuzz/<FuzzTarget>/ and they must be
+# treated in opposite ways.
+#
+#   1. The SEED CORPUS: files a human wrote and named, one per interesting case.
+#      These are source. They are checked in, they are reviewed, and every new
+#      record type must add one (see CONTRIBUTING.md). Nothing below ignores
+#      them, and nothing should.
+#
+#   2. FUZZER ARTEFACTS: files `go test -fuzz` writes itself when it finds a
+#      failing input. Go names these after the SHA-256 digest of their contents,
+#      so they are exactly 64 lower-case hexadecimal characters with no
+#      extension. A 30-second local fuzz run can drop several of these into the
+#      working tree, and committing them by reflex is how a corpus turns into
+#      landfill.
+#
+# The pattern below matches (2) and not (1), because a descriptive seed name
+# always contains a character outside [0-9a-f] within its first sixteen. When a
+# fuzzer artefact turns out to be a genuine regression worth keeping, rename it
+# to describe the defect and `git add` it like any other seed.
+#
+# The leading `**/` is load-bearing: a pattern containing a slash is anchored to
+# this file's directory, so without it only a testdata/ directory at the
+# repository root would match, and every per-package corpus would be missed.
+**/testdata/fuzz/*/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
+
+# The generated corpus the fuzzing engine keeps between runs lives in the build
+# cache, not here, but an explicit -fuzzcachedir can redirect it into the tree.
+/fuzzcache/
+
+# ---------------------------------------------------------------------------
+# Go tooling
+# ---------------------------------------------------------------------------
+# Workspaces are a local development convenience and are never shared: a
+# committed go.work silently overrides every collaborator's module resolution.
+go.work
+go.work.sum
+
+# ---------------------------------------------------------------------------
+# Editors and operating systems
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+desktop.ini
