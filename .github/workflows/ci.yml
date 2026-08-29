@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # The engine is a separate repository, so this repository's CI cannot know
+    # that a change there broke the application. A daily build against the
+    # engine's main branch closes most of that gap; it reports after the fact
+    # rather than on the pull request, which is the cost ADR 0015 records.
+    - cron: '0 7 * * *'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS and Linux both ship real platform backends, so both must run
+        # the tests — a platform whose code only ever compiles in CI is a
+        # platform whose code does not work.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - run: go vet ./...
+      - run: go test -race -coverprofile=coverage.out ./...
+
+  build:
+    name: Cross-compile
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - {goos: linux,   goarch: amd64}
+          - {goos: linux,   goarch: arm64}
+          - {goos: linux,   goarch: arm}
+          - {goos: darwin,  goarch: arm64}
+          - {goos: darwin,  goarch: amd64}
+          - {goos: windows, goarch: amd64}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      # CGO_ENABLED=0 is what keeps this a single file with no libc
+      # requirement. The Windows target must build even though its gateway
+      # backend refuses at runtime: a build tag that stopped compiling would
+      # hide the refusal rather than deliver it.
+      - run: CGO_ENABLED=0 go build ./...
+        env:
+          GOOS: ${{ matrix.target.goos }}
+          GOARCH: ${{ matrix.target.goarch }}
+
+  fuzz:
+    name: Fuzz the wire codecs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      # Short, because this runs on every pull request. It is a smoke test that
+      # the seed corpus still passes and the target still builds, not a hunt.
+      - run: go test -run=XXX -fuzz=FuzzUnpack -fuzztime=60s ./internal/dhcp/
+
+  release-check:
+    name: No development replace directive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: go.mod must not contain a replace directive on a tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if grep -qE '^[[:space:]]*replace' go.mod; then
+            echo "::error file=go.mod::remove the replace directive before tagging a release"
+            grep -nE '^[[:space:]]*replace' go.mod
+            exit 1
+          fi
