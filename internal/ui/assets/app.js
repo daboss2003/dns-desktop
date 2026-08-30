@@ -229,11 +229,141 @@ $("flush").onclick = async () => {
   } catch (e) { alert(e.message); }
 };
 
+// The models this platform offers, with what each one costs. The costs are the
+// point: a household that came for per-device rules must not choose the
+// arrangement that cannot express them and find out afterwards.
+const MODELS = {
+  none: {
+    title: "Don't share — just resolve",
+    detail: "Devices you point at this machine are filtered. Nothing on this machine changes.",
+  },
+  platform: {
+    title: "Create a Wi-Fi hotspot",
+    detail: "This machine's operating system creates the network, hands out addresses and shares the connection.",
+    cost: "Every device is filtered, but they all arrive looking like one client — so per-device rules cannot apply.",
+  },
+  managed: {
+    title: "Share to a network, with full control",
+    detail: "This application hands out the addresses, so each device keeps its own identity and per-device rules work.",
+    cost: "Does not create Wi-Fi. Point your router at this machine, or share over a cable.",
+  },
+};
+
+let netChosen = null;
+
+async function loadNetwork() {
+  const g = await api("/api/gateway");
+  netChosen = netChosen || g.settings.sharing || (g.sharing || []).slice(-1)[0] || "none";
+
+  $("net-intro").textContent = g.running
+    ? "Sharing is on."
+    : "Choose how devices should reach this machine.";
+
+  // The models, with the ones this platform cannot do shown and explained
+  // rather than hidden — an absent option is a question nobody can answer.
+  const available = new Set(g.capabilities.sharing || []);
+  const box = $("net-models");
+  box.replaceChildren();
+  for (const [key, m] of Object.entries(MODELS)) {
+    const can = available.has(key);
+    const el2 = el("label", null, "model" + (can ? "" : " off") + (netChosen === key && can ? " chosen" : ""));
+    el2.append(el("b", m.title));
+    el2.append(el("span", m.detail));
+    if (m.cost) el2.append(el("span", m.cost, "cost"));
+    if (!can) {
+      const why = (g.capabilities.capabilities || [])
+        .filter((c) => !c.available && (key === "platform" ? c.name === "access-point" : c.name === "share-uplink"))
+        .map((c) => c.reason)[0];
+      el2.append(el("span", why || "not available on this machine", "cost"));
+    } else if (!g.running) {
+      el2.onclick = () => { netChosen = key; loadNetwork(); };
+    }
+    box.append(el2);
+  }
+
+  const wantsHotspot = netChosen === "platform";
+  $("net-ssid").parentElement.style.display = wantsHotspot ? "" : "none";
+  $("net-pass").parentElement.style.display = wantsHotspot ? "" : "none";
+  if (!g.running) {
+    $("net-ssid").value = $("net-ssid").value || g.settings.ssid || "";
+    $("net-capture").checked = !!g.settings.capture_dns;
+    $("net-ipv6").checked = !!g.settings.allow_ipv6;
+  }
+  $("net-start").disabled = g.running || netChosen === "none";
+  $("net-stop").disabled = !g.running;
+  $("net-start").textContent = g.running ? "Sharing" : "Start sharing";
+
+  const dl = $("net-status");
+  dl.replaceChildren();
+  if (g.running) {
+    const rows = [
+      ["State", g.status.state || (g.detail ? "degraded" : "running")],
+      ["Devices with an address", g.leases < 0 ? "handled by the system" : nf.format(g.leases)],
+      ["DNS capture", g.status.dns_capture ? "in force" : "off"],
+    ];
+    if (g.status.hotspot) rows.unshift(["Network", g.status.hotspot]);
+    if (g.detail) rows.push(["Detail", g.detail]);
+    for (const [k, v] of rows) { dl.append(el("dt", k)); dl.append(el("dd", v)); }
+  }
+
+  const caps = $("net-caps");
+  caps.replaceChildren();
+  for (const c of g.capabilities.capabilities) {
+    const li = el("li");
+    li.append(el("span", c.name, "n"));
+    li.append(el("span", c.available ? "available" : "unavailable", c.available ? "y" : "x"));
+    if (!c.available && c.reason) li.append(el("span", c.reason, "muted"));
+    caps.append(li);
+  }
+}
+
+$("net-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const msg = $("net-msg");
+  msg.className = "hint";
+  msg.textContent = "Starting…";
+  try {
+    await api("/api/gateway/start", {
+      method: "POST",
+      body: JSON.stringify({
+        sharing: netChosen,
+        ssid: $("net-ssid").value,
+        passphrase: $("net-pass").value,
+        capture_dns: $("net-capture").checked,
+        allow_ipv6: $("net-ipv6").checked,
+      }),
+    });
+    msg.className = "hint good";
+    msg.textContent = "Sharing.";
+    $("net-pass").value = "";
+  } catch (err) {
+    msg.className = "hint bad";
+    msg.textContent = err.message;
+  }
+  loadNetwork();
+};
+
+$("net-stop").onclick = async () => {
+  const msg = $("net-msg");
+  msg.className = "hint";
+  msg.textContent = "Stopping…";
+  try {
+    await api("/api/gateway/stop", { method: "POST" });
+    msg.className = "hint";
+    msg.textContent = "Stopped. Everything it changed on this machine has been put back.";
+  } catch (err) {
+    msg.className = "hint bad";
+    msg.textContent = err.message;
+  }
+  loadNetwork();
+};
+
 async function refresh() {
   try {
     await loadStatus();
     if (view === "devices") await loadDevices();
     if (view === "activity") await loadQueries();
+    if (view === "network") await loadNetwork();
   } catch (e) {
     $("dot").className = "dot off";
     console.error(e);

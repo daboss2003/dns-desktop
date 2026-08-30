@@ -28,7 +28,7 @@ produces a `CGO_ENABLED=0` static binary for a Raspberry Pi or a container.
 
 | Package | What it does | Coverage |
 | --- | --- | --- |
-| `internal/app` | The product with no interface attached: resolver, devices, policy, state. | |
+| `internal/app` | The product with no interface attached: resolver, devices, policy, gateway lifecycle, state. | 51% |
 | `internal/ui` | The embedded interface and its HTTP surface. No build step, no bundler. | |
 | `internal/dhcp` | DHCPv4 codec, lease pool and server. RFC 2131/2132, fuzzed in CI. | 86% |
 | `internal/device` | Device identity, per-device policy, the address index the DNS path reads without a lock. | 88% |
@@ -141,7 +141,8 @@ ends with something that runs.
 | 12.6 | Linux gateway | hostapd, nftables, journalled bring-up, reconciliation after a crash. **Done** |
 | 12.7 | Windows gateway | Mobile Hotspot, `New-NetNat`, journalled bring-up. **Done**, less the forwarding-layer filters |
 | 12.8 | macOS gateway | pfctl sharing and redirect, Internet Sharing detection. |
-| 12.9 | DHCP wired in, and the privileged helper | Devices get their addresses from us; a tiny audited command surface with peer-credential checks. |
+| 12.9 | Wired end to end | The app starts and stops the gateway, runs the DHCP server, and has a Network screen. **Done** |
+| 12.12 | Privileged helper | A tiny audited command surface with peer-credential checks, so the whole application need not be root. |
 | 12.10 | Desktop shell and interface | A native window, a menu-bar item, the embedded dashboard. **Done** |
 | 12.11 | Packaging | `.app` bundle, `.deb`/`.rpm`, MSI, autostart, release automation. |
 

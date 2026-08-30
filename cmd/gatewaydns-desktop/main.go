@@ -80,6 +80,20 @@ func run(args []string) error {
 	}
 	defer a.Close()
 
+	// Anything a previous run left on this machine goes first. A process that
+	// was killed could not clean up after itself, and a firewall rule or a
+	// running access point from an hour ago is a machine whose owner cannot get
+	// online with nothing on it to explain why.
+	if rep, err := a.ReconcileGateway(context.Background()); err != nil {
+		log.Warn("could not check for leftovers from a previous run", slog.String("error", err.Error()))
+	} else if !rep.Clean() {
+		log.Info("cleaned up after a previous run",
+			slog.Any("found", rep.Found), slog.Any("removed", rep.Removed))
+		for _, f := range rep.Failed {
+			log.Error("could not clean up", slog.String("what", f))
+		}
+	}
+
 	// The resolver first, and its failure is fatal: everything else in this
 	// program exists to show what it is doing.
 	served := make(chan error, 1)

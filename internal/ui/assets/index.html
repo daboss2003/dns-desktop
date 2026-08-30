@@ -10,6 +10,7 @@
   <button class="tab" data-view="devices">Devices</button>
   <button class="tab" data-view="activity">Activity</button>
   <button class="tab" data-view="filters">Filters</button>
+  <button class="tab" data-view="network">Network</button>
   <div class="spacer"></div>
   <span class="muted" id="build"></span>
 </nav>
@@ -86,5 +87,40 @@
     </div>
   </section>
 </main>
+  <section id="network" class="view hidden">
+    <div class="panel">
+      <h2>Share this connection</h2>
+      <p class="muted" id="net-intro"></p>
+      <div id="net-models"></div>
+      <form id="net-form" class="stack">
+        <label>Network name
+          <input id="net-ssid" placeholder="GatewayDNS" autocomplete="off" spellcheck="false" maxlength="32">
+        </label>
+        <label>Password
+          <input id="net-pass" type="password" placeholder="at least 8 characters" autocomplete="new-password" maxlength="63">
+        </label>
+        <label class="check"><input type="checkbox" id="net-capture">
+          <span>Force every device to use this resolver
+            <em>Even ones set to use another. If this machine's resolver stops answering,
+            devices lose DNS entirely — so it is withdrawn automatically when that happens.</em></span>
+        </label>
+        <label class="check"><input type="checkbox" id="net-ipv6">
+          <span>Allow IPv6 through unfiltered
+            <em>Off means IPv6 is refused. Leaving it on means a device that gets an IPv6
+            route resolves over it and is not filtered, while the counters look healthy.</em></span>
+        </label>
+        <div class="row">
+          <button type="submit" id="net-start">Start sharing</button>
+          <button type="button" class="secondary" id="net-stop">Stop</button>
+        </div>
+      </form>
+      <p class="hint" id="net-msg"></p>
+      <dl id="net-status"></dl>
+    </div>
+    <div class="panel">
+      <h2>What this machine can do</h2>
+      <ul class="caps" id="net-caps"></ul>
+    </div>
+  </section>
 <script src="/app.js"></script>
 </body>

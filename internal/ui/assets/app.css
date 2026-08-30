@@ -85,3 +85,22 @@ button[type=submit], #allow-btn, .secondary {
 .caps .y { color: var(--good); }
 .caps .x { color: var(--muted); }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+
+/* The network screen. */
+.stack { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.stack label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 13px; }
+.stack label input[type=text], .stack label input:not([type=checkbox]) {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); max-width: 420px;
+}
+.check { flex-direction: row !important; align-items: flex-start; gap: 9px !important; }
+.check input { margin-top: 3px; }
+.check span { color: var(--ink); display: block; }
+.check em { display: block; color: var(--muted); font-style: normal; font-size: 12.5px; margin-top: 2px; max-width: 620px; }
+.row { display: flex; gap: 8px; }
+.model { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-top: 10px; cursor: pointer; display: block; }
+.model.chosen { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.model.off { opacity: .55; cursor: not-allowed; }
+.model b { display: block; }
+.model span { color: var(--muted); font-size: 13px; }
+.model .cost { color: var(--bad); font-size: 12.5px; display: block; margin-top: 4px; }

@@ -69,6 +69,12 @@ type Options struct {
 	// configuration available and costs nothing to choose.
 	NoQueryLog bool
 
+	// Gateway is the platform backend. Nil uses this platform's own, which is
+	// what every real run does; a test supplies one so that the wiring — start
+	// the gateway, then DHCP, then capture, and undo it in reverse — is
+	// exercised without a radio.
+	Gateway gateway.Gateway
+
 	Logger *slog.Logger
 }
 
@@ -82,7 +88,12 @@ type App struct {
 	gw      gateway.Gateway
 	caps    gateway.Capabilities
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// bound is the address the resolver is ACTUALLY answering on, which is not
+	// always the one that was configured: a port of zero means the operating
+	// system chose one. The DNS redirect has to name the real port, or it
+	// points at nothing and every device on the network loses DNS.
+	bound    netip.AddrPort
 	pc       net.PacketConn
 	listener net.Listener
 	serving  bool
@@ -93,6 +104,9 @@ type App struct {
 	// the device table changes, and read on the query path through an atomic
 	// swap inside the policy engine.
 	profiles sync.Map // string -> *policy.Rules
+
+	// gwState is the gateway, when one is running. See gateway.go.
+	gwState gatewayState
 }
 
 // New builds the application. It opens no sockets; see [App.Serve].
@@ -106,7 +120,10 @@ func New(opts Options) (*App, error) {
 	a := &App{
 		opts: opts,
 		log:  opts.Logger,
-		gw:   gateway.New(),
+		gw:   opts.Gateway,
+	}
+	if a.gw == nil {
+		a.gw = gateway.New()
 	}
 	if a.log == nil {
 		a.log = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -264,6 +281,9 @@ func (a *App) Serve() error {
 		return a.listenError("tcp", err)
 	}
 	a.pc, a.listener, a.serving, a.started = pc, l, true, time.Now()
+	if ap, err := netip.ParseAddrPort(pc.LocalAddr().String()); err == nil {
+		a.bound = ap
+	}
 	a.mu.Unlock()
 
 	a.log.Info("resolving", slog.String("addr", a.opts.Listen),
@@ -367,6 +387,14 @@ func (a *App) Status() Status {
 	return s
 }
 
+// BoundPort is the port the resolver is actually answering on, or zero when it
+// is not serving.
+func (a *App) BoundPort() uint16 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.bound.Port()
+}
+
 // Devices returns the device table.
 func (a *App) Devices() *device.Table { return a.devices }
 
@@ -389,7 +417,17 @@ func (a *App) Close() error {
 	a.closed, a.serving = true, false
 	a.mu.Unlock()
 
-	// State first, because the rest of this can fail and the device names are
+	// The gateway first, because it is the only thing here that changes the
+	// machine outside this process. A firewall rule or a running hostapd that
+	// outlived the application would leave somebody with no network and nothing
+	// on the screen to explain it.
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := a.StopGateway(stopCtx); err != nil {
+		a.log.Error("could not stop the gateway cleanly", slog.String("error", err.Error()))
+	}
+	stopCancel()
+
+	// State next, because the rest of this can fail and the device names are
 	// the part a person would notice losing.
 	if dir, err := a.stateDir(); err == nil {
 		a.saveDevices(dir)

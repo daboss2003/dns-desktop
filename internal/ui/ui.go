@@ -37,6 +37,7 @@
 package ui
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -57,6 +58,7 @@ import (
 	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
 	"github.com/gatewaydns/gatewaydns-desktop/internal/build"
 	"github.com/gatewaydns/gatewaydns-desktop/internal/device"
+	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway"
 )
 
 //go:embed assets
@@ -131,6 +133,9 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/rules/block", s.authed(s.handleBlock))
 	s.mux.Handle("POST /api/rules/allow", s.authed(s.handleAllow))
 	s.mux.Handle("POST /api/cache/flush", s.authed(s.handleFlush))
+	s.mux.Handle("GET /api/gateway", s.authed(s.handleGateway))
+	s.mux.Handle("POST /api/gateway/start", s.authed(s.handleGatewayStart))
+	s.mux.Handle("POST /api/gateway/stop", s.authed(s.handleGatewayStop))
 
 	// The interface itself. Unauthenticated by design: it is markup and script
 	// with no data in it, and the token it needs is injected into the window
@@ -332,6 +337,70 @@ func (s *Server) rule(w http.ResponseWriter, r *http.Request, block bool) {
 func (s *Server) handleFlush(w http.ResponseWriter, r *http.Request) {
 	s.app.Engine().ClearCache()
 	s.json(w, map[string]bool{"ok": true})
+}
+
+// handleGateway reports what sharing is doing and what this machine could do.
+//
+// One call, because a person looking at this screen is asking one question —
+// can this machine share its connection, is it doing so, and what would it cost
+// — and answering it in three round trips is three chances to draw a
+// half-finished screen.
+func (s *Server) handleGateway(w http.ResponseWriter, r *http.Request) {
+	caps, err := s.app.Gateway().Capabilities(r.Context())
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, "asking this machine what it can do: "+err.Error())
+		return
+	}
+	ifaces, err := s.app.Gateway().Interfaces(r.Context())
+	if err != nil {
+		ifaces = nil
+	}
+	st := s.app.GatewayStatus()
+	if !st.Running {
+		// Not running, so show what was last chosen rather than an empty form.
+		st.Settings = s.app.LoadGatewaySettings()
+	}
+	s.json(w, struct {
+		app.GatewayStatus
+		Platform     string               `json:"platform"`
+		Capabilities gateway.Capabilities `json:"capabilities"`
+		Interfaces   []gateway.Interface  `json:"interfaces"`
+		Subnet       string               `json:"default_subnet"`
+	}{st, s.app.Gateway().Platform(), caps, ifaces, app.DefaultGatewaySubnet})
+}
+
+func (s *Server) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
+	var settings app.GatewaySettings
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&settings); err != nil {
+		s.fail(w, http.StatusBadRequest, "the request body is not the expected JSON")
+		return
+	}
+	// Bringing a gateway up runs external commands and waits on radios, so it
+	// gets its own budget rather than the request's — a browser that gave up
+	// after thirty seconds would otherwise abandon a bring-up halfway.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 2*time.Minute)
+	defer cancel()
+	if err := s.app.StartGateway(ctx, settings); err != nil {
+		// A refusal from the platform is not a server error: it is an answer,
+		// and the interface shows it to the person who asked.
+		code := http.StatusBadRequest
+		if errors.Is(err, gateway.ErrUnsupported) {
+			code = http.StatusNotImplemented
+		}
+		s.fail(w, code, err.Error())
+		return
+	}
+	s.json(w, s.app.GatewayStatus())
+}
+
+func (s *Server) handleGatewayStop(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), time.Minute)
+	defer cancel()
+	if err := s.app.StopGateway(ctx); err != nil {
+		s.fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.json(w, s.app.GatewayStatus())
 }
 
 // Listen binds a loopback address for the interface.
