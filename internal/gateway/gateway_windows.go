@@ -25,8 +25,17 @@ import (
 //
 //   - Create an access point, through the Mobile Hotspot that ships with it.
 //   - Share a connection, through that hotspot or through Windows NAT.
-//   - Block one device from the network, through the Windows firewall.
-//   - Refuse DNS to every resolver but ours, through user-mode filters.
+//   - Block one device from the network, and refuse DNS to every resolver but
+//     ours, through user-mode filters in the Windows Filtering Platform.
+//
+// Note which mechanism does the blocking, because the obvious one does not
+// work: a Windows Firewall rule naming a remote address does NOT stop a device
+// reaching the internet through a connection this machine is sharing. The
+// firewall authors its filters at the layers that see sockets on this machine,
+// and forwarded traffic never passes through them — bypassing firewall rules
+// this way has been intended behaviour since Windows 10. Blocking a device has
+// to happen at the forwarding layer, or it is a feature that looks right in the
+// interface and does nothing.
 //
 // What it cannot do is REWRITE a DNS packet's destination. There is no
 // user-mode destination rewrite on Windows: the whole filtering action set is
