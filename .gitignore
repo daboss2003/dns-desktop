@@ -11,6 +11,8 @@
 # Binaries built from ./cmd. Anchored to the repository root so that a package
 # directory of the same name is never ignored by accident.
 /gatewaydns
+/gatewaydns-desktop
+/gatewaydns-desktop-headless
 /bin/
 /dist/
 
