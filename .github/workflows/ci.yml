@@ -36,8 +36,17 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+      # WebKitGTK is what the window is on Linux. macOS and Windows have
+      # theirs in the operating system.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
       - run: go vet ./...
       - run: go test -race -coverprofile=coverage.out ./...
+      # The desktop build, natively. A shell that only ever cross-compiles is a
+      # shell nobody has proved opens a window.
+      - run: go build ./cmd/gatewaydns-desktop
 
   build:
     name: Cross-compile
@@ -56,11 +65,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      # CGO_ENABLED=0 is what keeps this a single file with no libc
-      # requirement. The Windows target must build even though its gateway
-      # backend refuses at runtime: a build tag that stopped compiling would
-      # hide the refusal rather than deliver it.
-      - run: CGO_ENABLED=0 go build ./...
+      # The headless build is what cross-compiles: no window, no CGO, one
+      # static file for a Raspberry Pi or a container. The desktop build links
+      # against the platform's own webview and is built natively by the test
+      # job on each operating system, which is why every platform with a
+      # backend is in that matrix.
+      - run: CGO_ENABLED=0 go build -tags nogui ./...
         env:
           GOOS: ${{ matrix.target.goos }}
           GOARCH: ${{ matrix.target.goarch }}

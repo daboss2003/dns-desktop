@@ -14,44 +14,65 @@ headless server daemon.
 
 ## Status
 
-**Milestone 12 is in progress.** What exists and is tested:
+**It runs.** A window, a menu-bar item, and a filtering resolver behind both.
+
+```console
+$ make build && ./gatewaydns-desktop
+```
+
+What works today: the resolver with DNS-over-TLS upstreams and blocklists; a
+device table that names every device that asks and remembers it across
+restarts; per-device pause; a query log; and the dashboard that shows all of it.
+`-headless` runs the same application with no window, and `make build-headless`
+produces a `CGO_ENABLED=0` static binary for a Raspberry Pi or a container.
 
 | Package | What it does | Coverage |
 | --- | --- | --- |
-| `internal/dhcp` | DHCPv4 codec, lease pool and server. RFC 2131/2132, including the parts usually skipped: long options (RFC 3396), option overload, the broadcast flag. Fuzzed in CI. | 86% |
-| `internal/device` | The device table: identity, per-device profiles, the address-to-device index the DNS path reads without a lock. | 88% |
-| `internal/gateway` | The portable gateway interface: three sharing models, capability reporting with reasons, interface enumeration. | 76% |
+| `internal/app` | The product with no interface attached: resolver, devices, policy, state. | |
+| `internal/ui` | The embedded interface and its HTTP surface. No build step, no bundler. | |
+| `internal/dhcp` | DHCPv4 codec, lease pool and server. RFC 2131/2132, fuzzed in CI. | 86% |
+| `internal/device` | Device identity, per-device policy, the address index the DNS path reads without a lock. | 88% |
+| `internal/gateway` | Three sharing models, capability reporting with reasons, interface enumeration. | 76% |
 
-Not yet: bringing a gateway up on any platform, the user interface, the
-privileged helper, and packaging. See [Delivery](#delivery).
+Not yet: bringing a gateway up on any platform, wiring the DHCP server into the
+application, and packaging. See [Delivery](#delivery).
 
 ## Architecture
 
 ```
-                    ┌──────────────────────────────┐
-                    │  cmd/gatewaydns-desktop      │
-                    └───────────────┬──────────────┘
-                                    │
-      ┌──────────────┬──────────────┼──────────────┬──────────────┐
-      ▼              ▼              ▼              ▼              ▼
-  ┌────────┐   ┌──────────┐   ┌──────────┐   ┌─────────┐   ┌──────────┐
-  │  ui    │   │  device  │   │   dhcp   │   │ gateway │   │  state   │
-  │ (SPA + │   │  table   │   │  server  │   │ (Linux, │   │ (on-disk │
-  │  HTTP) │   │          │   │          │   │  macOS) │   │  config) │
-  └────┬───┘   └─────┬────┘   └─────┬────┘   └────┬────┘   └──────────┘
-       │             │              │             │
-       └─────────────┴──────┬───────┴─────────────┘
-                            ▼
-              ┌───────────────────────────┐
-              │  github.com/gatewaydns/   │
-              │  gatewaydns  (the engine) │
-              │  imported, never modified │
-              └───────────────────────────┘
+        ┌──────────────────────────────────────────────┐
+        │  cmd/gatewaydns-desktop                      │
+        │  ┌────────────────┐    ┌──────────────────┐  │
+        │  │ menu-bar item  │    │  native window   │  │
+        │  │ (primary)      │    │  (on demand)     │  │
+        │  └───────┬────────┘    └────────┬─────────┘  │
+        └──────────┼──────────────────────┼────────────┘
+                   │                      │ HTTP, loopback
+                   │              ┌───────▼────────┐
+                   │              │  internal/ui   │
+                   │              │  embedded SPA  │
+                   │              └───────┬────────┘
+                   └──────────┬───────────┘
+                              ▼
+                   ┌─────────────────────┐
+                   │    internal/app     │  the product, no UI
+                   └──────────┬──────────┘
+          ┌──────────┬────────┴────┬──────────────┐
+          ▼          ▼             ▼              ▼
+      ┌────────┐ ┌────────┐  ┌──────────┐  ┌───────────┐
+      │ device │ │  dhcp  │  │ gateway  │  │ the engine│
+      │ table  │ │ server │  │ (per OS) │  │ (imported)│
+      └────────┘ └────────┘  └──────────┘  └───────────┘
 ```
 
 The dependency direction is one way and enforced by the module graph: the engine
 has no `require` block at all, so it cannot import anything here without an edit
 CI rejects. See [ADR 0001][adr1] in the engine repository.
+
+The window talks to its own process over HTTP, which looks like indirection in
+one binary and is what makes one interface serve two deployments: the same
+screens work pointed at a [`gatewaydnsd`][daemon] on a server. See
+[ADR 0006][adr6].
 
 Three joins matter:
 
@@ -114,17 +135,24 @@ ends with something that runs.
 | 12.6 | Linux gateway | hostapd, nftables, journalled bring-up, reconciliation after a crash. |
 | 12.7 | Windows gateway | Mobile Hotspot, `New-NetNat`, WFP enforcement, firewall blocking. |
 | 12.8 | macOS gateway | pfctl sharing and redirect, Internet Sharing detection. |
-| 12.9 | Privileged helper | A tiny audited command surface with peer-credential checks. |
-| 12.10 | HTTP API and UI | The embedded single-page application, live updates, loopback authentication. |
+| 12.9 | DHCP wired in, and the privileged helper | Devices get their addresses from us; a tiny audited command surface with peer-credential checks. |
+| 12.10 | Desktop shell and interface | A native window, a menu-bar item, the embedded dashboard. **Done** |
 | 12.11 | Packaging | `.app` bundle, `.deb`/`.rpm`, MSI, autostart, release automation. |
 
 ## Building
 
 ```sh
-make build      # a static binary
-make test-race  # the tests under the race detector
-make fuzz       # the wire codecs, briefly
+make build           # the desktop application for this platform
+make run             # build it and open the window
+make build-headless  # a CGO-free static binary with no window
+make test-race       # the tests under the race detector
+make fuzz            # the wire codecs, briefly
 ```
+
+The desktop build links against the platform's own webview: system frameworks
+on macOS, `libwebkit2gtk-4.1-dev` on Linux, the WebView2 runtime on Windows
+(present on Windows 11, installable on 10). The headless build needs none of
+them and cross-compiles to every target.
 
 During development this module resolves the engine through a `replace`
 directive pointing at `../gatewaydns`. Clone both side by side. `make
@@ -133,6 +161,7 @@ tag.
 
 [adr1]: https://github.com/gatewaydns/gatewaydns/blob/main/docs/adr/0001-two-products-one-dependency-boundary.md
 [adr4]: docs/adr/0004-dns-capture-differs-by-platform.md
+[adr6]: docs/adr/0006-a-desktop-application-not-a-local-server.md
 
 ## Licence
 

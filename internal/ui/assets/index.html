@@ -1,0 +1,90 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GatewayDNS</title>
+<link rel="stylesheet" href="/app.css">
+<body>
+<nav>
+  <div class="brand"><span class="dot" id="dot"></span> GatewayDNS</div>
+  <button class="tab active" data-view="overview">Overview</button>
+  <button class="tab" data-view="devices">Devices</button>
+  <button class="tab" data-view="activity">Activity</button>
+  <button class="tab" data-view="filters">Filters</button>
+  <div class="spacer"></div>
+  <span class="muted" id="build"></span>
+</nav>
+
+<main>
+  <section id="overview" class="view">
+    <div class="cards">
+      <div class="card"><h3>Queries</h3><b id="s-queries">—</b></div>
+      <div class="card"><h3>Blocked</h3><b id="s-blocked">—</b></div>
+      <div class="card"><h3>From cache</h3><b id="s-cache">—</b></div>
+      <div class="card"><h3>Devices</h3><b id="s-devices">—</b></div>
+    </div>
+    <div class="panel">
+      <h2>Resolver</h2>
+      <dl>
+        <dt>Listening on</dt><dd id="s-listen">—</dd>
+        <dt>Forwarding to</dt><dd id="s-upstreams">—</dd>
+        <dt>Rules loaded</dt><dd id="s-rules">—</dd>
+        <dt>Running for</dt><dd id="s-uptime">—</dd>
+      </dl>
+      <p class="hint" id="point-hint"></p>
+    </div>
+    <div class="panel">
+      <h2>This machine as a gateway</h2>
+      <p class="muted" id="s-platform"></p>
+      <ul class="caps" id="s-caps"></ul>
+    </div>
+  </section>
+
+  <section id="devices" class="view hidden">
+    <div class="panel">
+      <h2>Devices</h2>
+      <p class="muted">Everything that has asked this resolver for a name. Rename one to
+        recognise it; pause one to stop it resolving anything at all.</p>
+      <table id="device-table"><thead><tr>
+        <th>Name</th><th>Address</th><th>Hardware</th><th>Seen</th><th></th>
+      </tr></thead><tbody></tbody></table>
+      <p class="empty" id="devices-empty">Nothing has asked yet. Point a device at this
+        machine and it will appear here.</p>
+    </div>
+  </section>
+
+  <section id="activity" class="view hidden">
+    <div class="panel">
+      <h2>Activity</h2>
+      <div class="filters">
+        <button class="chip active" data-blocked="">Everything</button>
+        <button class="chip" data-blocked="true">Blocked</button>
+        <button class="chip" data-blocked="false">Allowed</button>
+      </div>
+      <table id="query-table"><thead><tr>
+        <th>Time</th><th>Device</th><th>Name</th><th>Type</th><th>Answer</th>
+      </tr></thead><tbody></tbody></table>
+      <p class="empty" id="queries-empty"></p>
+    </div>
+  </section>
+
+  <section id="filters" class="view hidden">
+    <div class="panel">
+      <h2>Filters</h2>
+      <p class="muted">A blocked name covers everything under it. An allowed name always
+        wins, whatever blocks it — which is how you fix a list that got something wrong.</p>
+      <form id="rule-form">
+        <input id="rule-name" placeholder="example.com" autocomplete="off" spellcheck="false">
+        <button type="submit" data-act="block">Block</button>
+        <button type="button" data-act="allow" id="allow-btn">Allow</button>
+      </form>
+      <p class="hint" id="rule-msg"></p>
+      <dl>
+        <dt>Blocking</dt><dd id="s-block-rules">—</dd>
+        <dt>Allowing</dt><dd id="s-allow-rules">—</dd>
+      </dl>
+      <button class="secondary" id="flush">Clear the cache</button>
+    </div>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>

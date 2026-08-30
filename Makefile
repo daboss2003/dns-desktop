@@ -9,13 +9,19 @@ LDFLAGS := -s -w \
   -X github.com/gatewaydns/gatewaydns-desktop/internal/build.date=$(DATE)
 
 .DEFAULT_GOAL := help
-.PHONY: help build test test-race fuzz vet fmt fmt-check lint tidy release-check clean
+.PHONY: help build build-headless run test test-race fuzz vet fmt fmt-check lint tidy release-check clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-build: ## Build a static binary
-	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN) ./cmd/...
+build: ## Build the desktop application for this platform
+	go build -trimpath -ldflags '$(LDFLAGS)' -o $(BIN) ./cmd/gatewaydns-desktop
+
+build-headless: ## Build a static binary with no window, for a server or a Pi
+	CGO_ENABLED=0 go build -trimpath -tags nogui -ldflags '$(LDFLAGS)' -o $(BIN)-headless ./cmd/gatewaydns-desktop
+
+run: build ## Build and run the desktop application
+	./$(BIN)
 
 test: ## Run the tests
 	go test ./...
@@ -49,4 +55,4 @@ release-check: ## Fail if go.mod still carries a development replace directive
 	@echo "go.mod is release-clean"
 
 clean: ## Remove build artefacts
-	rm -rf $(BIN) coverage.out dist
+	rm -rf $(BIN) $(BIN)-headless coverage.out dist

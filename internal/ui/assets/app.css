@@ -1,0 +1,87 @@
+/* One stylesheet, no framework and no build step. It is a few screens; a
+   dependency here would be larger than the thing it styles. */
+:root {
+  --bg: #f6f7f9; --panel: #fff; --ink: #16181d; --muted: #6b7280;
+  --line: #e3e6ea; --accent: #2f6df6; --bad: #d1435b; --good: #1a9c6b;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --ink: #e8eaee; --muted: #9aa2ae;
+    --line: #2a2e36; --accent: #6d9bff; --bad: #ff7a8c; --good: #4fd6a0;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+nav {
+  display: flex; align-items: center; gap: 4px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 2;
+}
+.brand { font-weight: 650; margin-right: 14px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--good); }
+.dot.off { background: var(--bad); }
+.spacer { flex: 1; }
+.tab {
+  border: 0; background: transparent; color: var(--muted); font: inherit;
+  padding: 6px 12px; border-radius: 7px; cursor: pointer;
+}
+.tab:hover { background: var(--bg); color: var(--ink); }
+.tab.active { background: var(--accent); color: #fff; }
+main { padding: 20px; max-width: 1100px; margin: 0 auto; }
+.hidden { display: none; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card, .panel {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px;
+}
+.card h3 { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.card b { font-size: 26px; font-variant-numeric: tabular-nums; }
+.panel { margin-bottom: 16px; }
+.panel h2 { margin: 0 0 8px; font-size: 15px; }
+.muted { color: var(--muted); }
+dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; margin: 12px 0 0; }
+dt { color: var(--muted); }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 8px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+.name-cell { display: flex; align-items: center; gap: 8px; }
+.name-cell input {
+  font: inherit; color: inherit; background: transparent; border: 1px solid transparent;
+  border-radius: 6px; padding: 3px 6px; width: 100%; max-width: 240px;
+}
+.name-cell input:hover { border-color: var(--line); }
+.name-cell input:focus { border-color: var(--accent); outline: none; background: var(--bg); }
+button.link { border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; padding: 4px 6px; }
+button.link.danger { color: var(--bad); }
+.pill { font-size: 11px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--line); color: var(--muted); }
+.pill.blocked { color: var(--bad); border-color: var(--bad); }
+.pill.paused { color: var(--bad); border-color: var(--bad); }
+.chip { border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; padding: 4px 12px; border-radius: 20px; cursor: pointer; }
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filters { display: flex; gap: 6px; margin: 10px 0; }
+form { display: flex; gap: 8px; margin-top: 12px; }
+input#rule-name { flex: 1; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+button[type=submit], #allow-btn, .secondary {
+  font: inherit; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+}
+#allow-btn, .secondary { background: transparent; color: var(--accent); }
+.secondary { margin-top: 14px; }
+.hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.hint.bad { color: var(--bad); }
+.hint.good { color: var(--good); }
+.empty { color: var(--muted); text-align: center; padding: 26px 0; }
+.caps { list-style: none; padding: 0; margin: 10px 0 0; }
+.caps li { padding: 7px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; }
+.caps li:last-child { border-bottom: 0; }
+.caps .n { min-width: 130px; font-weight: 500; }
+.caps .y { color: var(--good); }
+.caps .x { color: var(--muted); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
