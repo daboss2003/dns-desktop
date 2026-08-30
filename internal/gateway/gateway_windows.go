@@ -4,13 +4,24 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
+
+// The probes, wired to the real implementations on this platform. They are
+// variables so that the untagged session file can name them without a build
+// tag of its own.
+func init() {
+	windowsDefaultRouteFn = windowsDefaultRouteImpl
+	windowsWirelessFn = windowsWirelessImpl
+}
 
 // New returns the gateway for this platform.
 //
@@ -44,85 +55,58 @@ import (
 // forwarded traffic. So Windows captures DNS by refusing the alternatives —
 // [CapDNSEnforce] rather than [CapDNSRedirect] — which reaches the same policy
 // outcome by a route a person can notice. See ADR 0004.
-func New() Gateway { return &windowsGateway{} }
-
-type windowsGateway struct{}
-
-var _ Gateway = (*windowsGateway)(nil)
-
-// Platform implements [Gateway].
-func (g *windowsGateway) Platform() string { return "windows" }
-
-const noRewriteOnWindows = "Windows has no user-mode way to rewrite a packet's destination, so DNS " +
-	"cannot be silently redirected here; this machine can instead refuse every other resolver, " +
-	"which is the dns-enforce capability"
-
-// Capabilities implements [Gateway].
-func (g *windowsGateway) Capabilities(ctx context.Context) (Capabilities, error) {
-	c := Capabilities{
-		Reasons: map[Capability]string{},
-		Sharing: []SharingModel{SharingNone},
+func New() Gateway {
+	return &windowsGateway{
+		run:      psRunner{},
+		journal:  journal{dir: windowsRunDir()},
+		elevated: isElevated,
 	}
-
-	// Never available, and not fixable by anything a person could install.
-	c.Reasons[CapDNSRedirect] = noRewriteOnWindows
-
-	// Everything below needs administrator rights. Reporting a capability the
-	// process cannot exercise would produce a control that fails when pressed,
-	// which is exactly what capability reporting exists to prevent.
-	if !isElevated() {
-		const why = "this needs administrator rights, and GatewayDNS Desktop is not running with them; " +
-			"restart it as an administrator"
-		for _, cap := range []Capability{
-			CapAccessPoint, CapShareUplink, CapDNSEnforce, CapBlockDevice, CapIPv6Control, CapOwnDHCP,
-		} {
-			c.Reasons[cap] = why
-			c.Fixable |= cap
-		}
-		c.Reasons[CapClientList] = why
-		c.Fixable |= CapClientList
-		return c, nil
-	}
-
-	// The rest is not in this build. Saying so is better than claiming a
-	// capability whose Start would fail: a person reads this in the interface
-	// and knows to point their router at this machine meanwhile.
-	for _, cap := range []Capability{
-		CapAccessPoint, CapShareUplink, CapDNSEnforce, CapBlockDevice,
-		CapIPv6Control, CapOwnDHCP, CapClientList,
-	} {
-		c.Reasons[cap] = notInThisBuild
-	}
-	return c, nil
 }
 
-// Interfaces implements [Gateway].
-func (g *windowsGateway) Interfaces(context.Context) ([]Interface, error) {
-	return enumerate(windowsDefaultRoute, windowsWireless)
+// windowsRunDir is where the recovery journal lives.
+//
+// Under ProgramData rather than a temporary directory, because unlike Linux's
+// /run it must survive nothing in particular — Windows has no memory file
+// system a service can rely on — and because the alternative, a per-user
+// directory, would hide a session started by an administrator from the
+// administrator who comes to clean up after it.
+func windowsRunDir() string {
+	base := os.Getenv("ProgramData")
+	if base == "" {
+		base = os.TempDir()
+	}
+	return filepath.Join(base, "GatewayDNS", "run")
 }
 
-// Start implements [Gateway] by refusing, naming what is missing.
-func (g *windowsGateway) Start(ctx context.Context, cfg Config) (Session, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, err
+// psRunner runs PowerShell, which is how this platform's networking is driven.
+type psRunner struct{}
+
+func (psRunner) Run(ctx context.Context, name, stdin string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
 	}
-	caps, err := g.Capabilities(ctx)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, err
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return string(out), errors.New(msg)
+		}
 	}
-	return nil, CheckCapabilities(g.Platform(), caps, cfg)
+	return string(out), err
 }
 
-// Reconcile implements [Gateway].
-func (g *windowsGateway) Reconcile(context.Context) (Report, error) { return Report{}, nil }
+func (psRunner) Look(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
 
 // isElevated reports whether this process is running with administrator rights.
 //
 // Through the token's elevation flag rather than by checking group membership:
 // a member of the Administrators group running unelevated has the group in its
-// token but marked deny-only, so a membership check answers yes to a process
-// that cannot in fact write a firewall rule. The distinction is the whole of
-// User Account Control and getting it backwards produces a capability report
+// token but marked deny-only, so a membership check answers yes for a process
+// that cannot in fact write a firewall rule. That distinction is the whole of
+// User Account Control, and getting it backwards produces a capability report
 // that is wrong on the most common Windows configuration there is.
 func isElevated() bool {
 	var token windows.Token
@@ -140,7 +124,7 @@ func isElevated() bool {
 // output of `route print` is localised — on a German Windows the headings are
 // German — and a product that stopped detecting the uplink outside English
 // locales would fail in a way nobody here would ever see.
-func windowsDefaultRoute() (string, error) {
+func windowsDefaultRouteImpl() (string, error) {
 	// 0.0.0.0 stands for "anywhere": the best route to it is the default route.
 	dest := windows.RawSockaddrInet4{Family: windows.AF_INET}
 	var row mibIPForwardRow2
@@ -201,7 +185,7 @@ var (
 // adapter NAME appearing in the output rather than on any English heading. That
 // is a weaker test than parsing the fields, and it is the one that keeps
 // working on a Windows whose language is not ours.
-func windowsWireless(name string) (bool, apSupport) {
+func windowsWirelessImpl(name string) (bool, apSupport) {
 	out, err := exec.Command("netsh", "wlan", "show", "interfaces").Output()
 	if err != nil {
 		// No WLAN service, or no wireless adapters at all. Not an error: a

@@ -98,7 +98,7 @@ is filtered. What differs is how devices come to be pointed at it.
 | --- | --- | --- | --- |
 | Resolve and filter for devices pointed here | Yes | Yes | Yes |
 | Device table and per-device policy | Yes | Yes | Yes |
-| Create an access point | hostapd | No¹ | Mobile Hotspot |
+| Create an access point | hostapd | No¹ | Mobile Hotspot⁴ |
 | Share a connection (NAT) | nftables/iptables | pfctl | ICS / `New-NetNat` |
 | Run our own DHCP, and so know devices fully | Yes | Yes | Yes² |
 | Capture DNS from a device that hardcodes a resolver | Redirect | Redirect | Enforce³ |
@@ -117,6 +117,12 @@ is filtered. What differs is how devices come to be pointed at it.
    outcome by a route a user can notice. Never a silent default. See
    [ADR 0004][adr4].
 
+4. And creating it costs per-device policy. The Mobile Hotspot is Internet
+   Connection Sharing underneath, which brings its own DHCP and its own DNS
+   proxy, so every query arrives from the proxy and all devices look like one
+   client. `New-NetNat` keeps identity and cannot create Wi-Fi. Both are
+   offered; the product says what each costs. See [ADR 0007][adr7].
+
 None of the three capture DNS over HTTPS to a hardcoded address, and a perfect
 redirect on Linux would not either.
 
@@ -132,8 +138,8 @@ ends with something that runs.
 | 12.3 | DHCP server | The protocol as a pure function; refusals follow RFC 2131 §4.3.2. **Done** |
 | 12.4 | Device table | Identity survives a restart; a reused address inherits nothing. **Done** |
 | 12.5 | Gateway interface | Three sharing models, capabilities with reasons, contract tests. **Done** |
-| 12.6 | Linux gateway | hostapd, nftables, journalled bring-up, reconciliation after a crash. |
-| 12.7 | Windows gateway | Mobile Hotspot, `New-NetNat`, WFP enforcement, firewall blocking. |
+| 12.6 | Linux gateway | hostapd, nftables, journalled bring-up, reconciliation after a crash. **Done** |
+| 12.7 | Windows gateway | Mobile Hotspot, `New-NetNat`, journalled bring-up. **Done**, less the forwarding-layer filters |
 | 12.8 | macOS gateway | pfctl sharing and redirect, Internet Sharing detection. |
 | 12.9 | DHCP wired in, and the privileged helper | Devices get their addresses from us; a tiny audited command surface with peer-credential checks. |
 | 12.10 | Desktop shell and interface | A native window, a menu-bar item, the embedded dashboard. **Done** |
@@ -162,6 +168,7 @@ tag.
 [adr1]: https://github.com/gatewaydns/gatewaydns/blob/main/docs/adr/0001-two-products-one-dependency-boundary.md
 [adr4]: docs/adr/0004-dns-capture-differs-by-platform.md
 [adr6]: docs/adr/0006-a-desktop-application-not-a-local-server.md
+[adr7]: docs/adr/0007-windows-trades-wifi-against-identity.md
 
 ## Licence
 
