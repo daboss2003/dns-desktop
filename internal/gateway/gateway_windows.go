@@ -96,9 +96,6 @@ func (g *windowsGateway) Capabilities(ctx context.Context) (Capabilities, error)
 	return c, nil
 }
 
-const notInThisBuild = "bringing a gateway up is not in this build; " +
-	"point a device at this machine as its DNS server and it is filtered"
-
 // Interfaces implements [Gateway].
 func (g *windowsGateway) Interfaces(context.Context) ([]Interface, error) {
 	return enumerate(windowsDefaultRoute, windowsWireless)

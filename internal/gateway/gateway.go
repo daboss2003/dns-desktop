@@ -873,10 +873,13 @@ func SelectAPInterface(ifaces []Interface, preferred, uplink string) (Interface,
 			return x, nil
 		}
 	}
-	// The message names the specific reason where there is exactly one
-	// candidate, because "no adapter supports AP mode" and "your only adapter
-	// is busy carrying the connection you are sharing" call for different
-	// actions and the second is far more common on a laptop.
+	// The message names the specific reason wherever there is one, because
+	// these call for different actions: "your only adapter is carrying the
+	// connection you are sharing" means share a wired connection, "your
+	// driver has no access-point mode" means buy a different adapter, and
+	// "no wireless adapter" means something else entirely. Collapsing all
+	// three into the last is how somebody with a working radio concludes they
+	// have no Wi-Fi.
 	for _, x := range ifaces {
 		if x.Kind == KindWireless && x.Name == uplink && x.SupportsAP {
 			return Interface{}, fmt.Errorf(
@@ -884,6 +887,22 @@ func SelectAPInterface(ifaces []Interface, preferred, uplink string) (Interface,
 					"connection being shared; share a wired connection instead, or add a USB adapter", x.Name)
 		}
 	}
+	var reasons []string
+	for _, x := range ifaces {
+		if x.Kind != KindWireless {
+			continue
+		}
+		why := x.APReason
+		if why == "" {
+			why = "its driver does not report access-point mode"
+		}
+		reasons = append(reasons, fmt.Sprintf("%s: %s", x.Name, why))
+	}
+	if len(reasons) > 0 {
+		return Interface{}, fmt.Errorf(
+			"gateway: no wireless adapter on this machine can host an access point (%s)",
+			strings.Join(reasons, "; "))
+	}
 	return Interface{}, errors.New(
-		"gateway: no wireless adapter on this machine reports access-point mode")
+		"gateway: this machine has no wireless adapter, so it cannot host an access point")
 }
