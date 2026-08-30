@@ -161,10 +161,16 @@ on macOS, `libwebkit2gtk-4.1-dev` on Linux, the WebView2 runtime on Windows
 (present on Windows 11, installable on 10). The headless build needs none of
 them and cross-compiles to every target.
 
-During development this module resolves the engine through a `replace`
-directive pointing at `../gatewaydns`. Clone both side by side. `make
-release-check` fails if that directive is still present, and so does CI on a
-tag.
+This module depends on the engine by version, like any other dependency, so it
+builds on its own with nothing else checked out.
+
+To develop the two together, check them out side by side and add a `go.work`
+naming both — it is deliberately not committed, because a workspace in a
+repository silently overrides every collaborator's module resolution:
+
+```sh
+go work init ./dns ./dnsd ./dns-desktop
+```
 
 [adr1]: https://github.com/daboss2003/dns/blob/main/docs/adr/0001-two-products-one-dependency-boundary.md
 [adr4]: docs/adr/0004-dns-capture-differs-by-platform.md
