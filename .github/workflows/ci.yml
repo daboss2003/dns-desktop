@@ -107,13 +107,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-22.04 and not ubuntu-latest, and that is a real constraint
-        # rather than a preference: webview_go pins pkg-config to
-        # webkit2gtk-4.0, and Ubuntu 24.04 onwards ships only 4.1. Until the
-        # binding supports 4.1 the Linux window needs a distribution that still
-        # carries 4.0. It is pinned here so the limitation is visible in CI
-        # rather than discovered by somebody trying to build it.
-        os: [macos-latest, windows-latest, ubuntu-22.04]
+        # ubuntu-22.04 is the supported Linux target, because webview_go pins
+        # pkg-config to webkit2gtk-4.0 and 22.04 certainly carries it.
+        #
+        # ubuntu-latest is here as a PROBE and is allowed to fail. Whether a
+        # current Ubuntu still provides 4.0 is a question worth having answered
+        # by a build rather than by me asserting it in a README, and the day it
+        # starts passing is the day the pin above can go.
+        os: [macos-latest, windows-latest, ubuntu-22.04, ubuntu-latest]
+    continue-on-error: ${{ matrix.os == 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

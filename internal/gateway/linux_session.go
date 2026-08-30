@@ -259,7 +259,9 @@ func (g *linuxGateway) Start(ctx context.Context, cfg Config) (Session, error) {
 		apIface = ap.Name
 	}
 	if apIface == "" {
-		return nil, errors.New("gateway: managed sharing needs an interface to serve devices on")
+		return nil, errors.New(
+			"gateway: managed sharing needs an interface to serve devices on. Configure a hotspot " +
+				"to have one created, or name the interface the devices are already attached to")
 	}
 
 	s := &linuxSession{

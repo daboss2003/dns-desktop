@@ -408,12 +408,25 @@ func TestThePlatformGatewayAnswers(t *testing.T) {
 		t.Errorf("Reconcile found leftovers on a machine that has run nothing: %+v", rep)
 	}
 
-	// Start either works or refuses in the documented shape. It must never
-	// panic and must never half-succeed.
+	// Start either works or refuses. The refusal may be either of two kinds
+	// and the difference matters to the caller: an *UnsupportedError is a
+	// permanent fact about the platform to be shown in the interface, while a
+	// configuration error is something the person who asked can fix. What must
+	// not happen is a panic, a half-started gateway, or a refusal that is
+	// neither — an error the caller can only print.
+	//
+	// The test asserted UnsupportedError alone, and so failed on a Linux runner
+	// with no wireless adapter, where the honest answer is that this
+	// configuration names no interface to serve devices on.
 	if _, err := g.Start(ctx, config(nil)); err != nil {
 		var ue *UnsupportedError
-		if !errors.As(err, &ue) {
-			t.Errorf("Start refused with %v (%T), want an *UnsupportedError", err, err)
+		if !errors.As(err, &ue) && !isConfigRefusal(err) {
+			t.Errorf("Start refused with %v (%T), which is neither a platform limit nor a "+
+				"configuration problem the caller could act on", err, err)
+		}
+		// And whichever it was, nothing was left running.
+		if rep, err := g.Reconcile(ctx); err == nil && !rep.Clean() {
+			t.Errorf("a refused Start left something behind: %+v", rep)
 		}
 	}
 }
@@ -462,4 +475,25 @@ func TestEnumerationIsCoherent(t *testing.T) {
 	if routed > 1 {
 		t.Errorf("%d interfaces claim the default route", routed)
 	}
+}
+
+// isConfigRefusal reports whether an error is this package telling the caller
+// its configuration cannot be satisfied, as opposed to the platform being
+// unable to do it at all.
+//
+// Matched on the message because these are plain errors by design: a
+// configuration problem is one the person who asked can fix by asking for
+// something else, and giving each its own type would be a taxonomy nobody
+// switches on.
+func isConfigRefusal(err error) bool {
+	for _, s := range []string{
+		"needs an interface", "needs a subnet", "needs this machine's address",
+		"no interface named", "cannot host an access point", "no wireless adapter",
+		"carries the default route", "is down",
+	} {
+		if strings.Contains(err.Error(), s) {
+			return true
+		}
+	}
+	return false
 }

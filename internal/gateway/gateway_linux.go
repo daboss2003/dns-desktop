@@ -40,6 +40,16 @@ const linuxRunDir = "/run/gatewaydns"
 type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, name, stdin string, args ...string) (string, error) {
+	// G204 is about running a command an attacker can choose. Nothing here is
+	// chosen by anyone outside this package: the names are the four literals
+	// its callers pass — nft, hostapd, ip, sysctl — and the arguments are
+	// either constants or values already refused by the validators in the
+	// nftables and hostapd packages, which exist precisely because an
+	// interface name and a network name reach this layer from a form somebody
+	// typed into. Running external tools is what this file is for; the check
+	// worth having on it is that its inputs are validated, and that check is
+	// spelled out where the inputs are.
+	//nolint:gosec // G204: see above.
 	cmd := exec.CommandContext(ctx, name, args...)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)

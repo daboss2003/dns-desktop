@@ -162,9 +162,11 @@ on 10), and WebKitGTK on Linux. The headless build needs none of them and
 cross-compiles to every target.
 
 **Linux needs WebKitGTK 4.0, not 4.1.** The Go binding pins pkg-config to
-`webkit2gtk-4.0`, and Ubuntu 24.04 onwards ships only 4.1 — so on a current
-distribution the window will not build until the binding supports it. Debian 12
-and Ubuntu 22.04 carry 4.0:
+`webkit2gtk-4.0`, and its most recent release is from 2024 with no 4.1 support
+— so the window builds only where 4.0 is available. Ubuntu 22.04 and Debian 12
+carry it; whether a current Ubuntu still does is checked by a CI job that is
+allowed to fail, so the answer comes from a build rather than from this
+paragraph:
 
 ```sh
 sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev
