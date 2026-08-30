@@ -20,8 +20,10 @@
 // the release check enforces its absence.
 module github.com/gatewaydns/gatewaydns-desktop
 
-go 1.25
+go 1.25.0
 
 require github.com/gatewaydns/gatewaydns v0.0.0
+
+require golang.org/x/sys v0.47.0
 
 replace github.com/gatewaydns/gatewaydns => ../gatewaydns
