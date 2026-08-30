@@ -178,9 +178,17 @@ func New(opts Options) (*App, error) {
 
 // Defaults.
 const (
-	// DefaultListen is loopback on the unprivileged DNS port; see
-	// [Options.Listen] for why it is not 0.0.0.0:53.
-	DefaultListen = "127.0.0.1:5353"
+	// DefaultListen is loopback on an unprivileged port; see [Options.Listen]
+	// for why it is not 0.0.0.0:53.
+	//
+	// 5335 and NOT 5353. Port 5353 is multicast DNS: Bonjour owns it on every
+	// macOS machine and avahi on most Linux ones, so binding it on a wildcard
+	// address fails outright — which is exactly what happens the moment
+	// somebody switches from loopback to serving the network, at the least
+	// convenient time and with an error about an address in use that says
+	// nothing about mDNS. 5335 is the convention for a local resolver sitting
+	// behind another one and is not claimed by anything.
+	DefaultListen = "127.0.0.1:5335"
 )
 
 // DefaultRetention keeps a day of history.
@@ -279,13 +287,26 @@ func (a *App) listenError(network string, err error) error {
 	case isAddrInUse(err) && port == "53":
 		return fmt.Errorf(
 			"cannot listen on %s: something else is already serving DNS on this machine — "+
-				"on Linux usually systemd-resolved or dnsmasq, on Windows the DNS Client service. "+
-				"Stop it, or serve on port 5353 instead: %w", addr, err)
+				"on Linux usually systemd-resolved or dnsmasq, on macOS mDNSResponder, on Windows "+
+				"the DNS Client service. Stop it, or serve on port %s instead: %w",
+			addr, defaultPort(), err)
+	case isAddrInUse(err) && port == "5353":
+		return fmt.Errorf(
+			"cannot listen on %s: port 5353 is multicast DNS, and Bonjour or avahi already has it. "+
+				"Use port %s instead — devices cannot be pointed at a port anyway, so this one only "+
+				"matters until you serve on 53: %w", addr, defaultPort(), err)
 	case isAddrInUse(err):
 		return fmt.Errorf("cannot listen on %s: the address is already in use: %w", addr, err)
 	default:
 		return fmt.Errorf("cannot listen on %s (%s): %w", addr, network, err)
 	}
+}
+
+// defaultPort is the port [DefaultListen] uses, for error messages that
+// suggest it.
+func defaultPort() string {
+	_, p, _ := net.SplitHostPort(DefaultListen)
+	return p
 }
 
 func isAddrInUse(err error) bool {
