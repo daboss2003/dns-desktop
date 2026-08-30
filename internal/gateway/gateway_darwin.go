@@ -34,7 +34,7 @@ const noAPOnMacOS = "macOS has no supported interface for a program to create a 
 
 // Capabilities implements [Gateway].
 func (g *darwinGateway) Capabilities(context.Context) (Capabilities, error) {
-	c := Capabilities{Reasons: map[Capability]string{}}
+	c := Capabilities{Reasons: map[Capability]string{}, Sharing: []SharingModel{SharingNone}}
 
 	// Never available, and not fixable by anything a person could buy.
 	c.Reasons[CapAccessPoint] = noAPOnMacOS

@@ -25,10 +25,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS and Linux both ship real platform backends, so both must run
-        # the tests — a platform whose code only ever compiles in CI is a
-        # platform whose code does not work.
-        os: [ubuntu-latest, macos-latest]
+        # Every platform with a backend runs the tests. A platform whose code
+        # only ever cross-compiles is a platform whose code does not work, and
+        # leaving Windows out of this list is how it came to be treated as one
+        # that did not matter.
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

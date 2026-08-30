@@ -11,6 +11,7 @@ import (
 
 func config(mutate func(*Config)) Config {
 	c := Config{
+		Sharing: SharingManaged,
 		Subnet:  netip.MustParsePrefix("10.42.0.0/24"),
 		Addr:    netip.MustParseAddr("10.42.0.1"),
 		DNSPort: 53,
@@ -128,32 +129,95 @@ func TestAnOpenHotspotNeedsNoPassphrase(t *testing.T) {
 
 // Required is what lets a configuration be refused in one place with one
 // explanation, rather than partway through bring-up with whatever error the
-// fifth step produced.
-func TestRequiredCapabilitiesFollowTheConfiguration(t *testing.T) {
+// fifth step produced. It follows the sharing model, because the models ask for
+// genuinely different things.
+func TestRequiredCapabilitiesFollowTheSharingModel(t *testing.T) {
 	t.Parallel()
-	plain := config(func(c *Config) { c.IPv6 = IPv6Allow })
-	if got := plain.Required(); got != CapShareUplink {
-		t.Errorf("a plain gateway needs %v, want share-uplink alone", got)
+
+	// Sharing nothing needs nothing. It is not a fallback: for a household
+	// whose router can hand out one DNS server it is the whole product, and a
+	// platform that could do nothing else would still deliver it.
+	none := Config{Sharing: SharingNone, DNSPort: 53}
+	if got := none.Required(); got != 0 {
+		t.Errorf("sharing nothing requires %v, want no capability at all", got)
 	}
-	hotspot := config(func(c *Config) {
+	if err := none.Validate(); err != nil {
+		t.Errorf("a resolver-only configuration was refused: %v", err)
+	}
+
+	// Platform sharing asks only for the access point the operating system
+	// manages. Demanding share-uplink would refuse Windows and macOS for not
+	// letting us write firewall rules they do not need us to write.
+	platform := Config{
+		Sharing: SharingPlatform, DNSPort: 53,
+		Hotspot: &HotspotConfig{SSID: "home", Passphrase: "correcthorse"},
+	}
+	if got := platform.Required(); got != CapAccessPoint {
+		t.Errorf("platform sharing requires %v, want the access point alone", got)
+	}
+
+	// Managed sharing owns everything, so it asks for everything.
+	managed := config(func(c *Config) {
 		c.Hotspot = &HotspotConfig{SSID: "home", Passphrase: "correcthorse"}
-		c.IPv6 = IPv6Allow
 	})
-	if hotspot.Required()&CapAccessPoint == 0 {
-		t.Errorf("a hotspot configuration does not require an access point: %v", hotspot.Required())
+	want := CapShareUplink | CapOwnDHCP | CapAccessPoint | CapIPv6Control
+	if got := managed.Required(); got != want {
+		t.Errorf("managed sharing requires %v, want %v", got, want)
 	}
-	// Blocking IPv6 is a capability, not an absence of one: "we did not
-	// configure IPv6" is not "IPv6 does not happen".
-	blocking := config(nil)
-	if blocking.Required()&CapIPv6Control == 0 {
-		t.Error("blocking IPv6 does not require ipv6-control; an unconfigured v6 route bypasses every rule")
+
+	// Blocking IPv6 is a capability rather than an absence of one, but only
+	// where this application owns the firewall: under platform sharing the
+	// operating system decides, and asking for it would refuse a working
+	// configuration.
+	if platform.Required()&CapIPv6Control != 0 {
+		t.Error("platform sharing demands ipv6-control, which it does not own")
+	}
+	if config(nil).Required()&CapIPv6Control == 0 {
+		t.Error("managed sharing does not require ipv6-control; an unconfigured v6 route bypasses every rule")
+	}
+}
+
+// A subnet is required only where this application assigns the addresses.
+// Windows uses 192.168.137.0/24 for its hotspot and will not be argued with, so
+// demanding one under platform sharing would refuse a configuration that works
+// and invite an operator to write a number that is then ignored.
+func TestOnlyManagedSharingNeedsASubnet(t *testing.T) {
+	t.Parallel()
+	if err := (Config{
+		Sharing: SharingPlatform, DNSPort: 53,
+		Hotspot: &HotspotConfig{SSID: "home", Passphrase: "correcthorse"},
+	}).Validate(); err != nil {
+		t.Errorf("platform sharing was refused for having no subnet: %v", err)
+	}
+	err := (Config{Sharing: SharingManaged, DNSPort: 53}).Validate()
+	if err == nil {
+		t.Fatal("managed sharing was accepted with no subnet")
+	}
+	if !strings.Contains(err.Error(), "subnet") {
+		t.Errorf("err = %v, want it to name the missing subnet", err)
+	}
+}
+
+// A hotspot with sharing switched off is a contradiction, and the message says
+// which of the two to change.
+func TestAHotspotWithoutSharingIsRefused(t *testing.T) {
+	t.Parallel()
+	err := (Config{
+		Sharing: SharingNone, DNSPort: 53,
+		Hotspot: &HotspotConfig{SSID: "home", Passphrase: "correcthorse"},
+	}).Validate()
+	if err == nil {
+		t.Fatal("a hotspot was accepted with sharing off")
+	}
+	if !strings.Contains(err.Error(), "sharing is off") {
+		t.Errorf("err = %v", err)
 	}
 }
 
 func TestCheckCapabilitiesNamesEveryMissingPiece(t *testing.T) {
 	t.Parallel()
 	have := Capabilities{
-		Have: CapShareUplink,
+		Have: CapShareUplink | CapOwnDHCP,
 		Reasons: map[Capability]string{
 			CapAccessPoint: "no adapter supports access-point mode",
 			CapIPv6Control: "no firewall tool is installed",
@@ -172,7 +236,7 @@ func TestCheckCapabilitiesNamesEveryMissingPiece(t *testing.T) {
 	}
 
 	// And a satisfiable configuration passes.
-	all := Capabilities{Have: CapShareUplink | CapAccessPoint | CapIPv6Control}
+	all := Capabilities{Have: CapShareUplink | CapOwnDHCP | CapAccessPoint | CapIPv6Control}
 	if err := CheckCapabilities("testos", all, config(func(c *Config) {
 		c.Hotspot = &HotspotConfig{SSID: "home", Passphrase: "correcthorse"}
 	})); err != nil {
@@ -187,19 +251,30 @@ func TestCapabilitiesMarshalForAUserInterface(t *testing.T) {
 		Have:    CapShareUplink,
 		Fixable: CapAccessPoint,
 		Reasons: map[Capability]string{CapAccessPoint: "install hostapd"},
+		Sharing: []SharingModel{SharingNone, SharingPlatform},
 	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var items []struct {
-		Name      string `json:"name"`
-		Available bool   `json:"available"`
-		Reason    string `json:"reason"`
-		Fixable   bool   `json:"fixable"`
+	var doc struct {
+		Capabilities []struct {
+			Name      string `json:"name"`
+			Available bool   `json:"available"`
+			Reason    string `json:"reason"`
+			Fixable   bool   `json:"fixable"`
+		} `json:"capabilities"`
+		Sharing []string `json:"sharing"`
 	}
-	if err := json.Unmarshal(b, &items); err != nil {
+	if err := json.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("decode %s: %v", b, err)
+	}
+	items := doc.Capabilities
+	// The models are named, not implied: a person choosing how this will work
+	// must be offered the alternatives rather than one arrangement and an
+	// apology.
+	if len(doc.Sharing) == 0 || doc.Sharing[0] != "none" {
+		t.Errorf("sharing = %v, want at least the model that needs nothing", doc.Sharing)
 	}
 	if len(items) != len(capNames) {
 		t.Fatalf("%d entries, want one per capability", len(items))
@@ -311,6 +386,13 @@ func TestThePlatformGatewayAnswers(t *testing.T) {
 		if caps.Have&n.c == 0 && caps.Reason(n.c) == "" {
 			t.Errorf("%s is unavailable with no reason", n.name)
 		}
+	}
+
+	// Every platform offers the model that needs nothing, because every
+	// platform can resolve for devices pointed at it. A gateway that offered no
+	// model at all would be telling a Windows user the product is not for them.
+	if !caps.Supports(SharingNone) {
+		t.Errorf("%s offers no sharing model at all: %v", g.Platform(), caps.Sharing)
 	}
 
 	if _, err := g.Interfaces(ctx); err != nil {

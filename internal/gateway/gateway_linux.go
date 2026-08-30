@@ -34,7 +34,7 @@ func (g *linuxGateway) Platform() string { return "linux" }
 // firewall tool, no adapter with AP mode — because those are the answers a
 // person can act on, and they are different answers with different fixes.
 func (g *linuxGateway) Capabilities(ctx context.Context) (Capabilities, error) {
-	c := Capabilities{Reasons: map[Capability]string{}}
+	c := Capabilities{Reasons: map[Capability]string{}, Sharing: []SharingModel{SharingNone}}
 
 	if _, err := exec.LookPath("hostapd"); err != nil {
 		c.Reasons[CapAccessPoint] = "hostapd is not installed, and it is what turns a wireless " +

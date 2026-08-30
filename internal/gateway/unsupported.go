@@ -32,7 +32,11 @@ func (u *Unsupported) Capabilities(context.Context) (Capabilities, error) {
 	}
 	// Nothing is Fixable: these are absent because of the platform, and telling
 	// somebody to try a different adapter would waste their afternoon.
-	return Capabilities{Reasons: reasons}, nil
+	//
+	// SharingNone is still offered, and is not a consolation prize: this
+	// machine resolves for every device pointed at it, which is the whole
+	// product for anyone whose router can hand out one DNS server.
+	return Capabilities{Reasons: reasons, Sharing: []SharingModel{SharingNone}}, nil
 }
 
 // Interfaces implements [Gateway]. It reports none rather than an error: there

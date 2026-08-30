@@ -7,6 +7,33 @@
 // exists to prevent one layer down and which this package has to prevent at its
 // own boundary.
 //
+// # There are three ways to be a gateway, not one
+//
+// The obvious model — this application runs the access point, hands out the
+// leases and writes the firewall rules — is a Linux model. Designing only for
+// it makes every other platform look like a failed Linux, which is both wrong
+// and the reason an earlier draft of this package reported Windows as capable
+// of nothing at all.
+//
+// Windows and macOS both ship the whole apparatus as one unit: Mobile Hotspot
+// and Internet Connection Sharing on one, Internet Sharing on the other. Each
+// creates the access point, runs a DHCP server, and masquerades — and hands
+// connecting devices THIS MACHINE as their resolver. A product whose value is
+// filtering is therefore fully delivered by that arrangement, without owning
+// any of the plumbing. See [SharingModel].
+//
+// So the models are:
+//
+//   - [SharingNone]. This machine resolves for devices pointed at it by a
+//     router, by a person, or by anything else. It needs no capability at all
+//     and works on every platform, and for a household whose router can be told
+//     to hand out one DNS server it is the whole product.
+//   - [SharingPlatform]. The operating system runs the access point, the DHCP
+//     server and the NAT; this application turns it on and supplies the DNS.
+//     Windows and macOS.
+//   - [SharingManaged]. This application runs all of it. Linux, and the only
+//     model that yields the full device identity a lease exchange carries.
+//
 // # Capabilities are part of the interface, not an implementation detail
 //
 // The temptation is a [Gateway] with a method per feature and implementations
@@ -15,23 +42,10 @@
 // missing feature from a broken one.
 //
 // So a platform states what it can do first, in [Gateway.Capabilities], and
-// every refusal names a capability and gives a reason a person can read. This
-// matters because the platforms genuinely differ, and the difference is large:
-//
-//   - Linux can create a Wi-Fi access point, given an adapter whose driver
-//     supports AP mode. It can route, masquerade and redirect DNS.
-//   - macOS cannot be driven into hosting an access point by any supported
-//     interface. Internet Sharing exists, it is a preference pane, and it is
-//     turned on by a person and not by a program. What macOS CAN do is be the
-//     resolver for devices pointed at it, and share a connection once a person
-//     has switched sharing on. Pretending otherwise would produce a product
-//     that claims a hotspot it cannot create — worse than one that explains the
-//     constraint and does the part it can.
-//   - Windows does neither, today, and says so.
-//
-// A capability that is absent for a reason the user can fix ("no adapter on
-// this machine supports AP mode") reads differently from one absent because the
-// platform will never have it, and [Capabilities] distinguishes them.
+// every refusal names a capability and gives a reason a person can read. A
+// capability absent for a reason the user can fix ("no adapter on this machine
+// supports AP mode") reads differently from one absent because the platform
+// will never have it, and [Capabilities] distinguishes them.
 //
 // # The DNS redirect has its own lifetime
 //
@@ -83,11 +97,34 @@ const (
 	// which is what makes the devices behind the gateway able to reach
 	// anything.
 	CapShareUplink
-	// CapDNSRedirect forces DNS from the served subnet to this machine's
-	// resolver, whatever the device was configured with. It is what reaches a
-	// device nobody can configure, and it is the rule that must be pulled the
-	// moment the resolver behind it is unhealthy.
+	// CapDNSRedirect rewrites DNS from the served subnet to this machine's
+	// resolver, whatever the device was configured with. The device believes it
+	// is talking to 8.8.8.8 and gets a filtered answer, so nothing breaks.
+	//
+	// It is what reaches a device nobody can configure, and it is the rule that
+	// must be pulled the moment the resolver behind it is unhealthy.
 	CapDNSRedirect
+	// CapDNSEnforce blocks DNS from the served subnet to anywhere but this
+	// machine, without rewriting it.
+	//
+	// It is the harsher half of the same intent and exists separately because
+	// one platform has only this one. Windows has no user-mode destination
+	// rewrite at all — the whole FWP action set is block, permit and three
+	// callout forms, redirection is a side effect only a kernel driver can
+	// produce, and the redirect layers never see forwarded traffic anyway. What
+	// Windows CAN do, from user mode and with no driver, is refuse the packet.
+	//
+	// The difference is visible to a user and must never be a silent default. A
+	// device with a hardcoded resolver meets a redirect and is filtered; it
+	// meets enforcement and either falls back to the resolver it was given —
+	// which is the good case, and the common one — or simply stops resolving.
+	// The second is a device that appears broken, so switching this on is a
+	// decision an operator takes deliberately.
+	//
+	// Neither capability touches DNS over HTTPS to a hardcoded address. That is
+	// worth saying plainly rather than implying: a perfect redirect on Linux
+	// does not solve it either.
+	CapDNSEnforce
 	// CapBlockDevice cuts one device off from the network entirely, rather than
 	// only refusing its DNS. Without it, "pause the internet for this device"
 	// means "answer NXDOMAIN", which a device with a hardcoded address and a
@@ -98,6 +135,22 @@ const (
 	// that acquires IPv6 by any route resolves over IPv6 and bypasses every
 	// rule here, while the IPv4 statistics look perfectly healthy.
 	CapIPv6Control
+	// CapOwnDHCP runs this application's own DHCP server on the served subnet,
+	// rather than whatever the platform's sharing brings with it.
+	//
+	// It is what separates [SharingManaged] from [SharingPlatform], and what it
+	// buys is identity: a lease exchange is the one moment a device states its
+	// hardware address, its hostname and its vendor class together, and without
+	// it the device table has only the addresses it sees querying. That is a
+	// poorer device list, not a broken product — see [CapClientList] for what
+	// fills the gap.
+	CapOwnDHCP
+	// CapClientList asks the platform which devices are currently connected.
+	//
+	// It matters most where [CapOwnDHCP] is absent: Windows will name the
+	// stations attached to its hotspot even though it, and not this
+	// application, gave them their addresses.
+	CapClientList
 )
 
 var capNames = []struct {
@@ -107,8 +160,11 @@ var capNames = []struct {
 	{CapAccessPoint, "access-point"},
 	{CapShareUplink, "share-uplink"},
 	{CapDNSRedirect, "dns-redirect"},
+	{CapDNSEnforce, "dns-enforce"},
 	{CapBlockDevice, "block-device"},
 	{CapIPv6Control, "ipv6-control"},
+	{CapOwnDHCP, "own-dhcp"},
+	{CapClientList, "client-list"},
 }
 
 func (c Capability) String() string {
@@ -154,7 +210,17 @@ type Capabilities struct {
 	// as opposed to those the platform will never have. "Buy a different USB
 	// adapter" is advice; "macOS does not permit this" is not.
 	Fixable Capability `json:"-"`
+
+	// Sharing is every model this machine can offer, weakest first.
+	//
+	// It always contains at least [SharingNone], which needs nothing. A user
+	// interface asks a person to choose from this rather than presenting one
+	// arrangement and an apology.
+	Sharing []SharingModel `json:"-"`
 }
+
+// Supports reports whether a sharing model is available.
+func (c Capabilities) Supports(m SharingModel) bool { return slices.Contains(c.Sharing, m) }
 
 // Has reports whether every capability in want is available.
 func (c Capabilities) Has(want Capability) bool { return c.Have&want == want }
@@ -192,7 +258,68 @@ func (c Capabilities) MarshalJSON() ([]byte, error) {
 		}
 		items = append(items, it)
 	}
-	return marshalJSON(items)
+	sharing := make([]string, 0, len(c.Sharing))
+	for _, m := range c.Sharing {
+		sharing = append(sharing, m.String())
+	}
+	return marshalJSON(struct {
+		Capabilities []item   `json:"capabilities"`
+		Sharing      []string `json:"sharing"`
+	}{items, sharing})
+}
+
+// SharingModel says who runs the access point, the DHCP server and the NAT.
+//
+// It exists because the answer differs by platform in a way that changes what
+// this application does rather than only how well it does it, and because a
+// person choosing a mode is choosing between real alternatives on a machine
+// that may offer more than one.
+type SharingModel uint8
+
+// The sharing models.
+const (
+	// SharingNone shares nothing. This machine resolves for devices that were
+	// pointed at it by a router, by a person, or by a platform's own sharing
+	// that somebody switched on themselves.
+	//
+	// It requires no capability and works everywhere, and it is not a fallback:
+	// for a household whose router can be told to hand out one DNS server, it is
+	// the whole product, with no firewall rules and nothing to clean up.
+	SharingNone SharingModel = iota
+
+	// SharingPlatform turns on the operating system's own sharing and supplies
+	// the DNS.
+	//
+	// Windows Mobile Hotspot and Internet Connection Sharing, and macOS
+	// Internet Sharing, each create the access point, run a DHCP server and
+	// masquerade — and hand connecting devices this machine as their resolver.
+	// So filtering is delivered in full without owning any of the plumbing.
+	//
+	// What is given up is identity. The platform's DHCP server takes the lease
+	// exchange, so devices are known by what they query and by whatever the
+	// platform will say about its own clients ([CapClientList]) rather than by
+	// what they said about themselves.
+	SharingPlatform
+
+	// SharingManaged runs the access point, the DHCP server and the firewall
+	// rules from this application.
+	//
+	// It is the most capable model and the most dangerous: everything it
+	// installs it must be able to remove, including after being killed. It is
+	// also the only model that yields a full device identity, and the only one
+	// that can intercept the DNS of a device configured to ask somebody else.
+	SharingManaged
+)
+
+func (m SharingModel) String() string {
+	switch m {
+	case SharingPlatform:
+		return "platform"
+	case SharingManaged:
+		return "managed"
+	default:
+		return "none"
+	}
 }
 
 // InterfaceKind says what a network interface is, as far as this package cares.
@@ -365,10 +492,13 @@ func (m IPv6Mode) String() string {
 
 // Config is one gateway session.
 type Config struct {
+	// Sharing says who runs the access point, the DHCP server and the NAT. The
+	// zero value, [SharingNone], shares nothing and needs nothing.
+	Sharing SharingModel `json:"-"`
+
 	// Hotspot describes an access point to create. Nil means do not create one,
 	// which is the configuration for a machine that is the gateway for devices
-	// already on its network — the only configuration macOS supports, and a
-	// perfectly ordinary one on Linux too.
+	// already on its network — and a perfectly ordinary one on every platform.
 	Hotspot *HotspotConfig `json:"hotspot,omitempty"`
 
 	// Uplink is the interface traffic leaves through. Empty selects the one
@@ -395,23 +525,38 @@ type Config struct {
 // because a person fixing a form one error per attempt is a bad experience.
 func (c Config) Validate() error {
 	var errs []error
-	if !c.Subnet.IsValid() {
-		errs = append(errs, errors.New("gateway: subnet is required"))
-	} else if !c.Subnet.Addr().Is4() {
+
+	// The served subnet is required only where this application assigns the
+	// addresses. Under platform sharing the operating system picks the subnet —
+	// Windows uses 192.168.137.0/24 and will not be argued with — so demanding
+	// one here would refuse a configuration that works and invite an operator
+	// to write a number that is then ignored.
+	switch {
+	case c.Sharing == SharingManaged && !c.Subnet.IsValid():
+		errs = append(errs, errors.New("gateway: managed sharing needs a subnet to serve"))
+	case c.Subnet.IsValid() && !c.Subnet.Addr().Is4():
 		errs = append(errs, fmt.Errorf("gateway: subnet %v is not IPv4; the served subnet is IPv4 only", c.Subnet))
 	}
-	if !c.Addr.IsValid() {
-		errs = append(errs, errors.New("gateway: the gateway's own address is required"))
-	} else if c.Subnet.IsValid() && !c.Subnet.Contains(c.Addr) {
+	switch {
+	case c.Sharing == SharingManaged && !c.Addr.IsValid():
+		errs = append(errs, errors.New("gateway: managed sharing needs this machine's address on the served subnet"))
+	case c.Addr.IsValid() && c.Subnet.IsValid() && !c.Subnet.Contains(c.Addr):
 		errs = append(errs, fmt.Errorf(
 			"gateway: address %v is outside subnet %v; devices would be told to route through an address they cannot reach",
 			c.Addr, c.Subnet))
 	}
+	// The resolver's port is always needed: every model has to tell devices, or
+	// the platform, where the DNS server actually is.
 	if c.DNSPort <= 0 || c.DNSPort > 65535 {
 		errs = append(errs, fmt.Errorf("gateway: dns port %d is not a port", c.DNSPort))
 	}
 	if h := c.Hotspot; h != nil {
 		errs = append(errs, h.validate()...)
+		if c.Sharing == SharingNone {
+			errs = append(errs, errors.New(
+				"gateway: a hotspot was configured but sharing is off; "+
+					"choose the platform or managed sharing model, or remove the hotspot"))
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -459,12 +604,28 @@ func isControl(r rune) bool { return r < 0x20 || r == 0x7f }
 // explanation rather than partway through bring-up with whatever error the
 // fifth step happened to produce.
 func (c Config) Required() Capability {
-	need := CapShareUplink
-	if c.Hotspot != nil {
-		need |= CapAccessPoint
-	}
-	if c.IPv6 == IPv6Block {
-		need |= CapIPv6Control
+	var need Capability
+	switch c.Sharing {
+	case SharingNone:
+		// Nothing at all. This machine resolves for whoever asks it, which
+		// every platform can do and which needs no rule anywhere.
+		return 0
+	case SharingPlatform:
+		// The operating system does the routing and the addressing, so the
+		// only thing being asked for is the access point it manages.
+		need = CapAccessPoint
+	case SharingManaged:
+		need = CapShareUplink | CapOwnDHCP
+		if c.Hotspot != nil {
+			need |= CapAccessPoint
+		}
+		// Only the managed model can be asked to fail IPv6 closed, because
+		// only it owns the firewall. Under platform sharing the operating
+		// system decides, and demanding the capability would refuse a
+		// configuration that works.
+		if c.IPv6 == IPv6Block {
+			need |= CapIPv6Control
+		}
 	}
 	return need
 }
@@ -517,10 +678,13 @@ type Status struct {
 	// Clients is how many devices are associated with the access point, and is
 	// -1 when the platform cannot tell.
 	Clients int `json:"clients"`
-	// DNSRedirect reports whether interception is currently in force. It is
-	// separate from State because it changes within a session and is the single
-	// most consequential thing in this struct.
-	DNSRedirect bool `json:"dns_redirect"`
+	// DNSCapture reports whether interception is in force, and by which
+	// mechanism: zero for none, [CapDNSRedirect] for a rewrite, or
+	// [CapDNSEnforce] for a block. It is separate from State because it changes
+	// within a session and is the single most consequential thing here — and it
+	// names the mechanism because the two are not equivalent to the person
+	// whose device stops working.
+	DNSCapture Capability `json:"-"`
 	// Detail explains a degraded or failed state in a sentence a person can
 	// read.
 	Detail string `json:"detail,omitempty"`
@@ -535,14 +699,19 @@ type Session interface {
 	// Status reports what the session is doing now.
 	Status(ctx context.Context) (Status, error)
 
-	// SetDNSRedirect turns interception on or off.
+	// SetDNSCapture turns interception on or off, by whichever of
+	// [CapDNSRedirect] and [CapDNSEnforce] the platform has — rewriting where
+	// it can, refusing where it cannot.
 	//
 	// It is separate from bring-up because its lifetime is: it goes on last,
 	// comes off first, and a caller whose resolver has stopped answering is
 	// expected to pull it immediately. While it is in force every DNS query on
 	// the network is aimed at one socket, and a socket that is not listening
 	// behind it means no device on the network has DNS at all.
-	SetDNSRedirect(ctx context.Context, on bool) error
+	//
+	// [Status.DNSCapture] says which mechanism is actually in force, because
+	// the two are not equivalent to the person whose device stops working.
+	SetDNSCapture(ctx context.Context, on bool) error
 
 	// Block cuts one address off from the network, or restores it.
 	//
