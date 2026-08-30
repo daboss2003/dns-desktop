@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/dnsmsg"
+	"github.com/daboss2003/dns/dnsmsg"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/device"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/dhcp"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway"
+	"github.com/daboss2003/dns-desktop/internal/device"
+	"github.com/daboss2003/dns-desktop/internal/dhcp"
+	"github.com/daboss2003/dns-desktop/internal/gateway"
 )
 
 // GatewaySettings is what a person chose in the interface.

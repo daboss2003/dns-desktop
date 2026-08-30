@@ -9,8 +9,8 @@ It is one of three consumers of [GatewayDNS Core][core], the engine. The other
 two are anyone embedding the library directly, and [gatewaydnsd][daemon], the
 headless server daemon.
 
-[core]: https://github.com/gatewaydns/gatewaydns
-[daemon]: https://github.com/gatewaydns/gatewaydnsd
+[core]: https://github.com/daboss2003/dns
+[daemon]: https://github.com/daboss2003/dnsd
 
 ## Status
 
@@ -166,7 +166,7 @@ directive pointing at `../gatewaydns`. Clone both side by side. `make
 release-check` fails if that directive is still present, and so does CI on a
 tag.
 
-[adr1]: https://github.com/gatewaydns/gatewaydns/blob/main/docs/adr/0001-two-products-one-dependency-boundary.md
+[adr1]: https://github.com/daboss2003/dns/blob/main/docs/adr/0001-two-products-one-dependency-boundary.md
 [adr4]: docs/adr/0004-dns-capture-differs-by-platform.md
 [adr6]: docs/adr/0006-a-desktop-application-not-a-local-server.md
 [adr7]: docs/adr/0007-windows-trades-wifi-against-identity.md

@@ -5,7 +5,7 @@ package main
 import (
 	"log/slog"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
+	"github.com/daboss2003/dns-desktop/internal/app"
 )
 
 // runShell has no window in this build.

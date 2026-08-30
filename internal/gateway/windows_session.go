@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway/winnet"
+	"github.com/daboss2003/dns-desktop/internal/gateway/winnet"
 )
 
 // Step names recorded in the Windows journal.

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/clock"
+	"github.com/daboss2003/dns/clock"
 )
 
 // State is where an address in the pool stands.

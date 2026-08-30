@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/build"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/ui"
+	"github.com/daboss2003/dns-desktop/internal/app"
+	"github.com/daboss2003/dns-desktop/internal/build"
+	"github.com/daboss2003/dns-desktop/internal/ui"
 )
 
 type listFlag []string

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/clock"
-	"github.com/gatewaydns/gatewaydns/resolver"
+	"github.com/daboss2003/dns/clock"
+	"github.com/daboss2003/dns/resolver"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/dhcp"
+	"github.com/daboss2003/dns-desktop/internal/dhcp"
 )
 
 var epoch = time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC)

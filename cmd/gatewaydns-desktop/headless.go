@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
+	"github.com/daboss2003/dns-desktop/internal/app"
 )
 
 // runHeadless waits for a signal, which is what a service manager sends.

@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/clock"
+	"github.com/daboss2003/dns/clock"
 )
 
 // Well-known ports and addresses, RFC 2131 section 4.1.

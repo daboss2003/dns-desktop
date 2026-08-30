@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway"
+	"github.com/daboss2003/dns-desktop/internal/gateway"
 )
 
 // fakeGateway is a platform that can do everything, so the wiring above it can

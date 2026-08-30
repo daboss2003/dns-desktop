@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/clock"
+	"github.com/daboss2003/dns/clock"
 )
 
 var (

@@ -53,12 +53,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/storage"
+	"github.com/daboss2003/dns/storage"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/build"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/device"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway"
+	"github.com/daboss2003/dns-desktop/internal/app"
+	"github.com/daboss2003/dns-desktop/internal/build"
+	"github.com/daboss2003/dns-desktop/internal/device"
+	"github.com/daboss2003/dns-desktop/internal/gateway"
 )
 
 //go:embed assets

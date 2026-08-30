@@ -4,9 +4,9 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -s -w \
-  -X github.com/gatewaydns/gatewaydns-desktop/internal/build.version=$(VERSION) \
-  -X github.com/gatewaydns/gatewaydns-desktop/internal/build.commit=$(COMMIT) \
-  -X github.com/gatewaydns/gatewaydns-desktop/internal/build.date=$(DATE)
+  -X github.com/daboss2003/dns-desktop/internal/build.version=$(VERSION) \
+  -X github.com/daboss2003/dns-desktop/internal/build.commit=$(COMMIT) \
+  -X github.com/daboss2003/dns-desktop/internal/build.date=$(DATE)
 
 .DEFAULT_GOAL := help
 .PHONY: help build build-headless run test test-race fuzz vet fmt fmt-check lint tidy release-check clean

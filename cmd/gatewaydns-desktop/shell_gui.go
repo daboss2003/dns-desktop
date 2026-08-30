@@ -11,7 +11,7 @@ import (
 	"fyne.io/systray"
 	webview "github.com/webview/webview_go"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/app"
+	"github.com/daboss2003/dns-desktop/internal/app"
 )
 
 // runShell is the desktop application: a menu-bar item and a window.

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway/hostapd"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway/nftables"
+	"github.com/daboss2003/dns-desktop/internal/gateway/hostapd"
+	"github.com/daboss2003/dns-desktop/internal/gateway/nftables"
 )
 
 // Runner executes an external command.

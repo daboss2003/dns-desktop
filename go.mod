@@ -18,11 +18,11 @@
 // the engine. It MUST be removed before release; a replace in a published go.mod
 // is the classic way to ship something that does not build for anyone else, and
 // the release check enforces its absence.
-module github.com/gatewaydns/gatewaydns-desktop
+module github.com/daboss2003/dns-desktop
 
 go 1.25.0
 
-require github.com/gatewaydns/gatewaydns v0.0.0
+require github.com/daboss2003/dns v0.0.0
 
 require (
 	fyne.io/systray v1.12.2
@@ -32,4 +32,4 @@ require (
 
 require github.com/godbus/dbus/v5 v5.1.0 // indirect
 
-replace github.com/gatewaydns/gatewaydns => ../gatewaydns
+replace github.com/daboss2003/dns => ../dns

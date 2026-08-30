@@ -81,7 +81,7 @@ func Current() Info {
 	return i
 }
 
-const enginePath = "github.com/gatewaydns/gatewaydns"
+const enginePath = "github.com/daboss2003/dns"
 
 // String renders the information the way a --version flag should print it.
 func (i Info) String() string {

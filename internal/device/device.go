@@ -69,10 +69,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns/clock"
-	"github.com/gatewaydns/gatewaydns/resolver"
+	"github.com/daboss2003/dns/clock"
+	"github.com/daboss2003/dns/resolver"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/dhcp"
+	"github.com/daboss2003/dns-desktop/internal/dhcp"
 )
 
 // ID identifies a device for as long as it is known, across address changes and

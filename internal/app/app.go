@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gatewaydns/gatewaydns"
-	"github.com/gatewaydns/gatewaydns/policy"
-	"github.com/gatewaydns/gatewaydns/resolver"
-	"github.com/gatewaydns/gatewaydns/storage"
+	"github.com/daboss2003/dns"
+	"github.com/daboss2003/dns/policy"
+	"github.com/daboss2003/dns/resolver"
+	"github.com/daboss2003/dns/storage"
 
-	"github.com/gatewaydns/gatewaydns-desktop/internal/device"
-	"github.com/gatewaydns/gatewaydns-desktop/internal/gateway"
+	"github.com/daboss2003/dns-desktop/internal/device"
+	"github.com/daboss2003/dns-desktop/internal/gateway"
 )
 
 // Options configure an [App].
