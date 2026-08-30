@@ -15,6 +15,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    # bash on every runner, Windows included. The default there is PowerShell,
+    # which parsed `go test -coverprofile=coverage.out ./...` into an argument
+    # list containing a package called ".out" — a failure with nothing to do
+    # with the code under test. The engine's workflow has always set this; these
+    # two were written without it.
+    shell: bash
+
 permissions:
   contents: read
 
@@ -36,17 +45,15 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
-      # WebKitGTK is what the window is on Linux. macOS and Windows have
-      # theirs in the operating system.
-      - if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
-      - run: go vet ./...
-      - run: go test -race -coverprofile=coverage.out ./...
-      # The desktop build, natively. A shell that only ever cross-compiles is a
-      # shell nobody has proved opens a window.
-      - run: go build ./cmd/gatewaydns-desktop
+      # Tested without the window.
+      #
+      # The GUI shell is one file behind a build tag, it has no tests, and its
+      # correctness is whether it compiles and opens a window — which the
+      # desktop-build job below checks on the platforms that can. Requiring a
+      # webview toolkit here would make every test on every platform depend on
+      # a C library that is not needed to run any of them.
+      - run: go vet -tags nogui ./...
+      - run: go test -race -tags nogui -coverprofile=coverage.out ./...
 
   lint:
     name: Lint
@@ -62,7 +69,10 @@ jobs:
           # v2 of golangci-lint, matching the `version: "2"` schema in
           # .golangci.yml. The action manages its own cache.
           version: latest
-          args: --timeout=5m
+          # Without the window, for the reason given in the test job: the
+          # linter would otherwise need a C toolkit to parse a file it has
+          # nothing to say about.
+          args: --timeout=5m --build-tags=nogui
 
   build:
     name: Cross-compile
@@ -90,6 +100,33 @@ jobs:
         env:
           GOOS: ${{ matrix.target.goos }}
           GOARCH: ${{ matrix.target.goarch }}
+
+  desktop:
+    name: Desktop build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-22.04 and not ubuntu-latest, and that is a real constraint
+        # rather than a preference: webview_go pins pkg-config to
+        # webkit2gtk-4.0, and Ubuntu 24.04 onwards ships only 4.1. Until the
+        # binding supports 4.1 the Linux window needs a distribution that still
+        # carries 4.0. It is pinned here so the limitation is visible in CI
+        # rather than discovered by somebody trying to build it.
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev
+      # The real thing: a window and a menu-bar item, linked against the
+      # platform's own webview. A shell that only ever cross-compiles is a
+      # shell nobody has proved opens a window.
+      - run: go build ./cmd/gatewaydns-desktop
 
   fuzz:
     name: Fuzz the wire codecs

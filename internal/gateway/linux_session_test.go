@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -391,6 +392,15 @@ func TestAnUnreadableJournalIsReported(t *testing.T) {
 // as the passphrase to anyone who can read it.
 func TestTheHostapdConfigurationIsNotWorldReadable(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX permission bits: Go reports 0666 for every
+		// regular file, and confidentiality there is an ACL that os.WriteFile's
+		// mode argument does not touch. The code under test only ever runs on
+		// Linux — it is reached through the Linux gateway — so this is a check
+		// of Linux behaviour that happens to compile everywhere, and asserting
+		// it on Windows would fail on a guarantee the platform does not have.
+		t.Skip("file permission bits are not a Windows concept")
+	}
 	r := &fakeRunner{}
 	g := testLinux(t, r)
 	stubInterfaces(g)

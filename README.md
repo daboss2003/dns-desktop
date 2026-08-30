@@ -157,9 +157,22 @@ make fuzz            # the wire codecs, briefly
 ```
 
 The desktop build links against the platform's own webview: system frameworks
-on macOS, `libwebkit2gtk-4.1-dev` on Linux, the WebView2 runtime on Windows
-(present on Windows 11, installable on 10). The headless build needs none of
-them and cross-compiles to every target.
+on macOS, the WebView2 runtime on Windows (present on Windows 11, installable
+on 10), and WebKitGTK on Linux. The headless build needs none of them and
+cross-compiles to every target.
+
+**Linux needs WebKitGTK 4.0, not 4.1.** The Go binding pins pkg-config to
+`webkit2gtk-4.0`, and Ubuntu 24.04 onwards ships only 4.1 — so on a current
+distribution the window will not build until the binding supports it. Debian 12
+and Ubuntu 22.04 carry 4.0:
+
+```sh
+sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev
+```
+
+Everything else — the resolver, the device table, the DHCP server, the gateway
+— builds and runs on any Linux with `make build-headless`, which needs no
+toolkit at all. The limitation is the window, not the product.
 
 This module depends on the engine by version, like any other dependency, so it
 builds on its own with nothing else checked out.
