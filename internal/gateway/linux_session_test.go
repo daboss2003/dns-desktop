@@ -264,15 +264,10 @@ func TestForwardingIsRestoredToWhatItWas(t *testing.T) {
 	r := &fakeRunner{}
 	g := testLinux(t, r)
 	stubInterfaces(g)
-	// This machine was already forwarding.
-	orig := r.Run
-	_ = orig
-	r.mu.Lock()
-	r.mu.Unlock()
 
-	// A runner whose sysctl read reports 1.
-	r2 := &alreadyForwarding{fakeRunner: r}
-	g.run = r2
+	// A machine that was ALREADY forwarding before this ran: its sysctl read
+	// reports 1, so teardown must put it back to 1 and not to 0.
+	g.run = &alreadyForwarding{fakeRunner: r}
 
 	s, err := g.Start(context.Background(), linuxConfig())
 	if err != nil {

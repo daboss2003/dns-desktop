@@ -1,0 +1,194 @@
+# golangci-lint configuration.
+#
+# The same rules the engine uses, and for the same reason: a linter whose output
+# is mostly noise is one people stop reading. Every exclusion below states why.
+# See the engine's copy for the findings that prompted each one.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # The ones that find defects.
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - errorlint      # a wrapped error compared with == is a check that stops working
+    - bodyclose      # a leaked response body is a leaked connection
+    - copyloopvar
+    - durationcheck  # multiplying two durations is almost always a mistake
+    - makezero
+    - nilerr         # returning nil after checking an error is rarely meant
+    - rowserrcheck
+    - unconvert
+    - gosec
+    - gocritic
+    - misspell
+    - revive
+
+  settings:
+    errcheck:
+      # A type assertion on a value taken from a sync.Pool this package owns
+      # and only ever fills with one type. The comma-ok form would be checking
+      # for a state that cannot arise, and the panic if it somehow did is more
+      # useful than a silent fallback.
+      check-type-assertions: false
+      # `_ = x()` is this codebase's way of saying "the error here is not
+      # actionable", and every one of them carries a comment saying why. With
+      # check-blank on, each also needs a //nolint — two annotations for one
+      # intent, and the second one carries no information. The thing
+      # check-blank actually protects against is a SILENT `_ =`, and a comment
+      # beside every one is a better guard than a directive beside every one.
+      check-blank: false
+      exclude-functions:
+        # Closing something there is nothing left to do about.
+        #
+        # Every site is one of two shapes: a read-only file being released, or
+        # a connection being torn down on a path that is ALREADY returning an
+        # error. In the first the close cannot fail in a way that matters — no
+        # data was buffered — and in the second the close error would displace
+        # the real one, which is the failure the caller needs. Writing `_ =` at
+        # eleven sites would say the same thing eleven times and hide the two
+        # places where a close error genuinely is checked.
+        - (io.Closer).Close
+        - (net.Conn).Close
+        - (net.PacketConn).Close
+        - (net.Listener).Close
+        - (*os.File).Close
+        - (io.ReadCloser).Close
+        # Writing to standard output. A CLI whose help text failed to print has
+        # nothing useful to do about it, and the write it actually depends on —
+        # the one carrying a result — is checked.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+
+    govet:
+      enable-all: true
+      disable:
+        # `if err := f(); err != nil` inside a function that already has an
+        # err is the idiom this codebase is written in, and the shadowing is
+        # the point: the inner err belongs to the inner statement. The check
+        # produced 21 findings and none of them was a bug.
+        - shadow
+        # Struct field alignment is a real consideration for the few types on
+        # the query path, and those are already ordered deliberately. Applied
+        # everywhere it would reorder fields that are grouped for reading.
+        - fieldalignment
+
+    gosec:
+      excludes:
+        # G115: integer conversion overflow.
+        #
+        # This module encodes and decodes a wire format in which every field's
+        # width is fixed by an RFC, so narrowing conversions are what the code
+        # is made of — `byte(len(label))` after the check that the label is at
+        # most 63 octets, `uint16(len(section))` after the check that the
+        # section fits. All 53 findings in the CI run were of that shape and
+        # all 53 were guarded. Leaving it on means fifty false positives
+        # standing in front of any real one.
+        - G115
+        # G104/G304 are covered more precisely by errcheck and by review of
+        # the two places a path is opened, both of which take it from an
+        # operator's own configuration.
+        - G104
+
+    staticcheck:
+      checks:
+        - all
+        # The QF (quickfix) group is refactoring suggestions, not defect
+        # reports: apply De Morgan's law here, use a tagged switch there, omit
+        # a type that could be inferred. Each is arguable and none is a bug,
+        # and five of them standing between a reader and a real SA finding is
+        # the ratio this file exists to fix.
+        - -QF1001
+        - -QF1002
+        - -QF1008
+        - -QF1011
+
+    gocritic:
+      # Diagnostics only. The style tag is opinions about parameter grouping
+      # and append chaining; the performance tag is 72 findings of hugeParam,
+      # every one of them an Options or Config struct passed by value on a path
+      # that runs once at construction — which is the API style this module
+      # chose on purpose, because a caller building a config should not have to
+      # think about who owns it.
+      enabled-tags:
+        - diagnostic
+      disabled-checks:
+        # A fresh slice built with make and then appended to under a different
+        # name is deliberate here, not the aliasing bug this check looks for.
+        - appendAssign
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
+        # Deliberately NOT enabled: `exported`. It fires on exported methods of
+        # UNEXPORTED types — systemClock.Now, nopStore.Append — which are not
+        # part of any documented surface and cannot be called from outside.
+        # Thirty-two findings, none of them a missing doc comment anyone could
+        # read.
+
+  exclusions:
+    generated: lax
+    rules:
+      # Tests may do things production code may not: ignore a Close on a
+      # value that is about to go out of scope, defer inside a loop that is
+      # about to end, keep a helper that only one case uses.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - bodyclose
+      # The examples are documentation. They are written to be READ, and the
+      # shape a reader should copy is the short one — log.Fatal on an error
+      # rather than the error plumbing a real program needs.
+      - path: (examples/|example_test\.go)
+        linters:
+          - errcheck
+          - gosec
+          - gocritic
+      # A test may multiply a duration by a count, convert for readability in a
+      # table, or compare a value with itself to check reflexivity.
+      - path: _test\.go
+        linters:
+          - durationcheck
+          - unconvert
+          # A wire-format test builds the fixed header with make and appends
+          # the variable part to it. That is the shape of the format, not the
+          # bug makezero looks for.
+          - makezero
+        text: ""
+      - path: _test\.go
+        linters:
+          - gocritic
+        text: "(dupArg|deferInLoop)"
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
+
+issues:
+  # Every finding, not the first three of each kind. A cap is how a config
+  # starts telling you less than it knows.
+  max-issues-per-linter: 0
+  max-same-issues: 0

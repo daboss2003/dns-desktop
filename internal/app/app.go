@@ -482,6 +482,8 @@ func ensureDir(dir string) error {
 const devicesFile = "devices.json"
 
 func (a *App) loadDevices(dir string) error {
+	//nolint:gosec // G304: this application's own state file, in the
+	// directory it chose and created with mode 0700.
 	b, err := os.ReadFile(filepath.Join(dir, devicesFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil // A first run is not a failure.

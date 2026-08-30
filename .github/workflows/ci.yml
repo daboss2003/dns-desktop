@@ -48,6 +48,22 @@ jobs:
       # shell nobody has proved opens a window.
       - run: go build ./cmd/gatewaydns-desktop
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          # v2 of golangci-lint, matching the `version: "2"` schema in
+          # .golangci.yml. The action manages its own cache.
+          version: latest
+          args: --timeout=5m
+
   build:
     name: Cross-compile
     runs-on: ubuntu-latest

@@ -67,7 +67,9 @@ func (j journal) record(entries []journalEntry) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	// The temporary file is removed on every path; on the success path the
+	// rename has already taken it, so the failure this ignores is "not there".
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.Write(b); err != nil {
 		f.Close()
 		return err
@@ -611,11 +613,14 @@ func (s *linuxSession) tearDown(ctx context.Context) error {
 		switch e.Step {
 		case stepHostapd:
 			// By pid file, so a hostapd somebody else started is not killed.
-			_, err = s.gw.run.Run(ctx, "pkill", "", "-F",
+			//
+			// The result is deliberately discarded rather than assigned and
+			// then cleared: pkill exits non-zero when no process matched, which
+			// on this path means it had already gone — the outcome being asked
+			// for. Assigning to err and overwriting it read as a bug, and the
+			// linter was right to say so.
+			_, _ = s.gw.run.Run(ctx, "pkill", "", "-F",
 				filepath.Join(s.gw.runDir, "hostapd.pid"))
-			// pkill reports "no process matched", which on this path means it
-			// had already gone. That is the outcome being asked for.
-			err = nil
 			_ = os.Remove(filepath.Join(s.gw.runDir, "hostapd.conf"))
 		case stepNftables:
 			err = s.gw.destroyTable(ctx)

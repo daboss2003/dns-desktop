@@ -78,7 +78,9 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	// Closing takes the gateway down with it; a failure there is logged
+	// inside Close, and there is nothing left to report it to here.
+	defer func() { _ = a.Close() }()
 
 	// Anything a previous run left on this machine goes first. A process that
 	// was killed could not clean up after itself, and a firewall rule or a

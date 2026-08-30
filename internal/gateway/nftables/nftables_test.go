@@ -101,8 +101,19 @@ func TestCaptureIsMembershipNotARuleEdit(t *testing.T) {
 	// The set starts empty, so a freshly loaded ruleset captures nothing. A
 	// gateway that started intercepting the moment it came up would intercept
 	// before its own resolver was known to be answering.
-	sets := s[strings.Index(s, "set capture"):]
-	if strings.Contains(sets[:strings.Index(sets, "}")], "elements") {
+	// Located rather than indexed blindly: strings.Index returns -1 when it
+	// finds nothing, and slicing on that panics — so a rename of the set would
+	// have crashed this test instead of failing it.
+	at := strings.Index(s, "set capture")
+	if at < 0 {
+		t.Fatalf("the ruleset declares no capture set:\n%s", s)
+	}
+	sets := s[at:]
+	end := strings.Index(sets, "}")
+	if end < 0 {
+		t.Fatalf("the capture set is not closed:\n%s", sets)
+	}
+	if strings.Contains(sets[:end], "elements") {
 		t.Error("the capture set is not empty at load; capture must be switched on deliberately")
 	}
 

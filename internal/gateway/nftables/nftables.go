@@ -208,7 +208,7 @@ func SetUplinkTo(iface string) (string, error) {
 	if err := safeIfname("uplink", iface); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("flush set inet %s %s\nadd element inet %s %s { \"%s\" }\n",
+	return fmt.Sprintf("flush set inet %s %s\nadd element inet %s %s { %q }\n",
 		Table, SetUplink, Table, SetUplink, iface), nil
 }
 
@@ -221,7 +221,7 @@ func Capture(iface string, on bool) (string, error) {
 	if on {
 		verb = "add"
 	}
-	return fmt.Sprintf("%s element inet %s %s { \"%s\" }\n", verb, Table, SetCapture, iface), nil
+	return fmt.Sprintf("%s element inet %s %s { %q }\n", verb, Table, SetCapture, iface), nil
 }
 
 // Block renders cutting one address off from the network, or restoring it.

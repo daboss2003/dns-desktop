@@ -39,6 +39,10 @@ package hostapd
 
 import (
 	"crypto/pbkdf2"
+	//nolint:gosec // G505: SHA-1 is not a choice here. IEEE 802.11i specifies
+	// PBKDF2-HMAC-SHA1 for deriving the pairwise master key, and every Wi-Fi
+	// client on earth computes the same thing. Using anything else would
+	// produce an access point nothing could join.
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"

@@ -166,6 +166,11 @@ func (a *App) StartGateway(ctx context.Context, s GatewaySettings) error {
 	stop := a.gwState.stop
 	a.gwState.mu.Unlock()
 	a.gwState.wg.Add(1)
+	// Background, deliberately: this watcher outlives the request that started
+	// the gateway, and tying it to that request's context would stop it the
+	// moment the browser tab was closed — leaving DNS capture in force with
+	// nothing checking the resolver behind it.
+	//nolint:gosec // G118: see above.
 	go a.watchResolver(stop)
 	a.log.Info("gateway running",
 		slog.String("sharing", cfg.Sharing.String()),
@@ -472,6 +477,8 @@ func (a *App) LoadGatewaySettings() GatewaySettings {
 	if err != nil {
 		return GatewaySettings{}
 	}
+	//nolint:gosec // G304: this application's own state file, in the
+	// directory it chose and created with mode 0700.
 	b, err := os.ReadFile(filepath.Join(dir, gatewayFile))
 	if err != nil {
 		return GatewaySettings{}

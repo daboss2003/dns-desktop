@@ -302,8 +302,9 @@ func (o Options) String(code OptionCode) (string, bool) {
 	return strings.TrimRight(string(b), "\x00"), true
 }
 
-// SetUint8, SetUint16, SetUint32, SetAddr, SetAddrs, SetDuration and SetString
-// are the writing halves of the readers above.
+// SetUint8 writes a one-octet option. It and the SetUint16, SetUint32, SetAddr,
+// SetAddrs, SetDuration and SetString below are the writing halves of the
+// readers above.
 func (o *Options) SetUint8(code OptionCode, v uint8) { o.Set(code, []byte{v}) }
 
 // SetUint16 writes a two-octet option.
